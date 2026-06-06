@@ -300,9 +300,20 @@ impl App {
             // reporting, re-encoded in its requested protocol.
             InputEvent::Mouse(m) => self.forward_mouse(&m),
             InputEvent::Forward(bytes) => {
+                // Typing returns the view to the live bottom (like every terminal).
+                self.snap_to_bottom();
                 let _ = self.writer.write_all(&bytes);
                 let _ = self.writer.flush();
             }
+        }
+    }
+
+    /// Return the view to the live bottom and repaint, if it was scrolled back.
+    fn snap_to_bottom(&mut self) {
+        if self.scroll_offset != 0 {
+            self.scroll_offset = self.screen.scroll_to(0);
+            self.renderer.repaint(self.screen.current());
+            self.dirty = false;
         }
     }
 
@@ -351,6 +362,8 @@ impl App {
         if self.menu_labels.is_empty() {
             return;
         }
+        // Draw the menu over the live screen, not a scrolled-back view.
+        self.snap_to_bottom();
         let menu = MenuState::new(
             self.menu_labels.clone(),
             self.menu_border,

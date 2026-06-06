@@ -9,18 +9,25 @@
 //! Mouse reporting is enabled here so the input tap can see Option-click and
 //! friends. We enable only button tracking (`?1000`) plus SGR encoding (`?1006`)
 //! — not any-motion tracking — to avoid a flood of motion reports.
+//!
+//! `smartty` also switches the outer terminal to its **alternate screen**. Since
+//! it parses child output into its own screen buffer and repaints from there, it
+//! is effectively a full-screen app (like `vim`/`tmux`); using the alt screen
+//! means the outer terminal keeps no native scrollback to fight `smartty`'s own
+//! wheel scrollback, and the user's pre-`smartty` screen is restored on exit.
 
 use std::io::{self, Write};
 
 use crossterm::terminal;
 
-/// Enable button + SGR mouse reporting on the outer terminal.
-const ENABLE_MOUSE: &[u8] = b"\x1b[?1000h\x1b[?1006h";
-/// Undo everything `smartty` may have turned on: mouse reporting, plus any input
-/// modes mirrored from the child (bracketed paste, application cursor/keypad),
-/// reset the cursor shape to the terminal default, and show the cursor again.
-const RESTORE_VISUALS: &[u8] =
-    b"\x1b[?1006l\x1b[?1000l\x1b[?2004l\x1b[?1l\x1b>\x1b[0 q\x1b[?25h";
+/// Switch to the alternate screen and enable button + SGR mouse reporting.
+const SETUP: &[u8] = b"\x1b[?1049h\x1b[?1000h\x1b[?1006h";
+/// Undo everything `smartty` turned on: mouse reporting, input modes mirrored
+/// from the child (bracketed paste, application cursor/keypad), the cursor shape,
+/// show the cursor, then leave the alternate screen (restoring the user's
+/// original screen). The alt-screen exit comes last so the resets apply first.
+const TEARDOWN_VISUALS: &[u8] =
+    b"\x1b[?1006l\x1b[?1000l\x1b[?2004l\x1b[?1l\x1b>\x1b[0 q\x1b[?25h\x1b[?1049l";
 
 /// RAII guard that puts the outer terminal into the mode `smartty` needs and
 /// restores it on drop. Dropping is idempotent — calling [`RawModeGuard::restore`]
@@ -36,7 +43,7 @@ impl RawModeGuard {
         install_panic_hook();
         terminal::enable_raw_mode()?;
         let mut out = io::stdout();
-        out.write_all(ENABLE_MOUSE)?;
+        out.write_all(SETUP)?;
         out.flush()?;
         Ok(RawModeGuard { active: true })
     }
@@ -56,10 +63,11 @@ impl Drop for RawModeGuard {
     }
 }
 
-/// Undo every terminal mutation: mouse off, cursor shown, raw mode off, flush.
+/// Undo every terminal mutation: reset modes/cursor, leave the alternate screen,
+/// raw mode off, flush.
 fn teardown() {
     let mut out = io::stdout();
-    let _ = out.write_all(RESTORE_VISUALS);
+    let _ = out.write_all(TEARDOWN_VISUALS);
     let _ = out.flush();
     let _ = terminal::disable_raw_mode();
     let _ = out.flush();

@@ -85,9 +85,9 @@ text   = "clear\n"
 
 ## Known limitations
 
-- `smartty` owns the visible screen and repaints from its buffer; the outer
-  terminal's native scrollback no longer accumulates child output (use the
-  built-in wheel scrollback instead).
+- `smartty` runs as a full-screen app on the outer terminal's alternate screen,
+  so use its built-in wheel scrollback during a session; your pre-`smartty`
+  screen is restored on exit.
 - Only press/release/scroll mouse events are forwarded to the child — drag/motion
   isn't yet (would require mirroring the child's motion-tracking mode onto the
   terminal).
