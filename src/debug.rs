@@ -1,6 +1,6 @@
 //! Opt-in diagnostic logging.
 //!
-//! Enabled by setting `SMARTTY_DEBUG=/path/to/log`. Since stderr is on the
+//! Enabled by setting `PROXTTY_DEBUG=/path/to/log`. Since stderr is on the
 //! alternate screen while running, diagnostics go to a file instead. Used to
 //! capture the raw input stream and scroll reactions when chasing input bugs.
 
@@ -12,7 +12,7 @@ static LOG: OnceLock<Option<Mutex<File>>> = OnceLock::new();
 
 fn log_file() -> &'static Option<Mutex<File>> {
     LOG.get_or_init(|| {
-        let path = std::env::var("SMARTTY_DEBUG").ok()?;
+        let path = std::env::var("PROXTTY_DEBUG").ok()?;
         OpenOptions::new()
             .create(true)
             .append(true)

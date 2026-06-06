@@ -109,7 +109,7 @@ impl Callbacks for PassThrough {
 
     fn copy_to_clipboard(&mut self, _: &mut vt100::Screen, ty: &[u8], data: &[u8]) {
         // Re-emit OSC 52 so a child like tmux/vim can drive the system clipboard
-        // through smartty (and over SSH). `data` is already base64.
+        // through proxtty (and over SSH). `data` is already base64.
         let mut out = self.out.borrow_mut();
         out.extend_from_slice(b"\x1b]52;");
         out.extend_from_slice(ty);

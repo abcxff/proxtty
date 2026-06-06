@@ -1,4 +1,4 @@
-//! Option-click context menu, built only on the `smartty` library.
+//! Option-click context menu, built only on the `proxtty` library.
 //!
 //! Demonstrates the consumer deciding what a mouse event means: an Option-click
 //! (Alt+left, or Ctrl+left as a fallback) opens a small menu *at the click
@@ -11,7 +11,7 @@
 
 use std::ops::ControlFlow;
 
-use smartty::{InputEvent, MouseButton, MouseEvent, MouseKind, Proxy, ProxyConfig, ProxyEvent};
+use proxtty::{InputEvent, MouseButton, MouseEvent, MouseKind, Proxy, ProxyConfig, ProxyEvent};
 
 /// Menu entries; selecting one sends `"<item>\n"` to the child.
 const ITEMS: &[&str] = &["echo hi", "date", "clear"];

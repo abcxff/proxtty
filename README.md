@@ -1,15 +1,15 @@
-# smartty
+# proxtty
 
 A smart PTY proxy that wraps an interactive terminal command, forwards terminal
 I/O transparently, intercepts local input events, and renders overlay UI on top
 of the child terminal session.
 
-The motivating use case: run `ssh` inside a shell inside `smartty`, then
+The motivating use case: run `ssh` inside a shell inside `proxtty`, then
 Option-click anywhere to open a local contextual menu over the remote session.
 
 > ## ⚠️ Tested on macOS + Ghostty only
 >
-> smartty was **developed and tested exclusively on macOS using the
+> proxtty was **developed and tested exclusively on macOS using the
 > [Ghostty](https://ghostty.org) terminal.** That is the only configuration it
 > has been exercised in.
 >
@@ -28,11 +28,11 @@ Option-click anywhere to open a local contextual menu over the remote session.
 - **Parsed screen model.** Child output is parsed into a virtual screen
   (`vt100`), so overlays composite cleanly and redraw with no artifacts.
 - **Mouse-aware.** Clicks, scroll, and drags are forwarded to apps that request
-  mouse reporting; otherwise the wheel drives smartty's own scrollback.
+  mouse reporting; otherwise the wheel drives proxtty's own scrollback.
 - **Crash-safe.** The terminal is restored on every exit path — normal exit,
   child exit, signals, and panics.
 
-smartty is a **library** (the proxy) plus a thin **binary** (the menu). The
+proxtty is a **library** (the proxy) plus a thin **binary** (the menu). The
 binary is just one consumer of the library — see [Use as a library](#use-as-a-library).
 
 ## Build
@@ -41,17 +41,17 @@ Requires a Rust toolchain.
 
 ```sh
 cargo build            # debug
-cargo build --release  # optimized → target/release/smartty
+cargo build --release  # optimized → target/release/proxtty
 ```
 
 ## Usage
 
-Wrap any interactive command. With no command, smartty runs your `$SHELL`:
+Wrap any interactive command. With no command, proxtty runs your `$SHELL`:
 
 ```sh
 cargo run -- zsh
 cargo run -- -- ssh my-server   # use `--` to pass flags through to the child
-./target/release/smartty zsh
+./target/release/proxtty zsh
 ```
 
 Inside the wrapped shell, use it like a normal terminal:
@@ -76,7 +76,7 @@ fzf
 
 ## Configuration
 
-Optional. Loaded from `$SMARTTY_CONFIG`, else `~/.config/smartty/config.toml`. A
+Optional. Loaded from `$PROXTTY_CONFIG`, else `~/.config/proxtty/config.toml`. A
 missing or invalid file falls back to built-in defaults.
 
 ```toml
@@ -118,7 +118,7 @@ contract is small and un-opinionated:
 
 ```rust
 use std::ops::ControlFlow;
-use smartty::{Proxy, ProxyConfig, ProxyEvent, InputEvent};
+use proxtty::{Proxy, ProxyConfig, ProxyEvent, InputEvent};
 
 let proxy = Proxy::start(&["zsh".into()], ProxyConfig::default())?;
 let code = proxy.run_with(|proxy, event| match event {
@@ -146,9 +146,9 @@ cargo run --example rainbow-mouse -- zsh   # a rainbow trail follows the mouse
 
 ## Known limitations
 
-- **Scrollback:** smartty runs on the outer terminal's alternate screen, so its
+- **Scrollback:** proxtty runs on the outer terminal's alternate screen, so its
   own wheel scrollback (10,000 lines) replaces the terminal's native scrollback
-  during a session; your pre-`smartty` screen is restored on exit.
+  during a session; your pre-`proxtty` screen is restored on exit.
 - **Text selection:** plain drag is captured for the Option-click trigger — use
   **Shift+drag** for native selection (the terminal's standard bypass).
 - **Images:** terminal graphics protocols (Kitty, Sixel, iTerm inline images)
@@ -163,13 +163,13 @@ passed through.
 
 ## Debugging
 
-Set `SMARTTY_DEBUG=/path/to/log` to append a diagnostic trace (raw input bytes,
+Set `PROXTTY_DEBUG=/path/to/log` to append a diagnostic trace (raw input bytes,
 scroll reactions) to a file — useful since stderr is on the alternate screen
 while running. No overhead when unset.
 
 ## Recovering a stuck terminal
 
-smartty restores your terminal on normal exit, child exit, and panics. If it is
+proxtty restores your terminal on normal exit, child exit, and panics. If it is
 ever killed in a way that bypasses cleanup (e.g. `kill -9`) and your terminal is
 left in a bad state, run:
 

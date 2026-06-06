@@ -336,6 +336,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "proxtty"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "crossterm",
+ "dirs",
+ "libc",
+ "portable-pty",
+ "serde",
+ "signal-hook 0.4.4",
+ "toml",
+ "vt100",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -510,22 +526,6 @@ name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
-
-[[package]]
-name = "smartty"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64",
- "crossterm",
- "dirs",
- "libc",
- "portable-pty",
- "serde",
- "signal-hook 0.4.4",
- "toml",
- "vt100",
-]
 
 [[package]]
 name = "syn"

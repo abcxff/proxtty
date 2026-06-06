@@ -5,7 +5,7 @@
 
 use std::ops::ControlFlow;
 
-use smartty::{Proxy, ProxyConfig, ProxyEvent};
+use proxtty::{Proxy, ProxyConfig, ProxyEvent};
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -47,7 +47,7 @@ fn draw_status(proxy: &mut Proxy) {
         .filter(|c| !c.is_whitespace())
         .count();
 
-    let label = format!(" smartty  {cols}x{rows}  {glyphs} glyphs ");
+    let label = format!(" proxtty  {cols}x{rows}  {glyphs} glyphs ");
     let visible: String = label.chars().take(cols as usize).collect();
     let pad = (cols as usize).saturating_sub(visible.chars().count());
 

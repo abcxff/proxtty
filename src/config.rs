@@ -1,7 +1,7 @@
 //! User configuration (Milestone 14).
 //!
-//! Loaded from `$SMARTTY_CONFIG`, else `~/.config/smartty/config.toml`. A missing
-//! or malformed file falls back to built-in defaults, so `smartty` always runs.
+//! Loaded from `$PROXTTY_CONFIG`, else `~/.config/proxtty/config.toml`. A missing
+//! or malformed file falls back to built-in defaults, so `proxtty` always runs.
 //!
 //! Example `config.toml`:
 //!
@@ -128,17 +128,17 @@ pub fn load() -> Config {
     match toml::from_str(&text) {
         Ok(cfg) => cfg,
         Err(e) => {
-            eprintln!("smartty: ignoring {}: {e}", path.display());
+            eprintln!("proxtty: ignoring {}: {e}", path.display());
             Config::default()
         }
     }
 }
 
 fn config_path() -> Option<PathBuf> {
-    if let Ok(p) = std::env::var("SMARTTY_CONFIG") {
+    if let Ok(p) = std::env::var("PROXTTY_CONFIG") {
         return Some(PathBuf::from(p));
     }
-    dirs::config_dir().map(|d| d.join("smartty").join("config.toml"))
+    dirs::config_dir().map(|d| d.join("proxtty").join("config.toml"))
 }
 
 /// Parse a hotkey spec like `ctrl-space`, `ctrl-]`, `ctrl-a` into its byte.

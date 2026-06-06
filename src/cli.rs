@@ -1,10 +1,10 @@
 //! Command-line argument parsing.
 //!
-//! `smartty` takes a command (and its arguments) to run inside the proxied PTY:
+//! `proxtty` takes a command (and its arguments) to run inside the proxied PTY:
 //!
 //! ```sh
-//! smartty zsh
-//! smartty -- ssh my-server
+//! proxtty zsh
+//! proxtty -- ssh my-server
 //! ```
 //!
 //! With no command, it falls back to `$SHELL`, then `/bin/sh`.
@@ -22,7 +22,7 @@ impl Cli {
     pub fn parse() -> Cli {
         let mut args = env::args().skip(1).peekable();
 
-        // Allow `smartty -- cmd ...` to disambiguate flags from the child command.
+        // Allow `proxtty -- cmd ...` to disambiguate flags from the child command.
         if args.peek().map(|s| s == "--").unwrap_or(false) {
             args.next();
         }

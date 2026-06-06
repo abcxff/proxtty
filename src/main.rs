@@ -1,4 +1,4 @@
-//! smartty CLI — a context-menu overlay built on the `smartty` proxy library.
+//! proxtty CLI — a context-menu overlay built on the `proxtty` proxy library.
 //!
 //! This binary is just one *consumer* of the library: it forwards all input to
 //! the child except a hotkey / trigger-click that opens a configurable menu,
@@ -12,7 +12,7 @@ mod overlay;
 
 use std::ops::ControlFlow;
 
-use smartty::{InputEvent, MouseButton, MouseEvent, MouseKind, Proxy, ProxyConfig, ProxyEvent};
+use proxtty::{InputEvent, MouseButton, MouseEvent, MouseKind, Proxy, ProxyConfig, ProxyEvent};
 
 use cli::Cli;
 use config::{ActionSpec, Config, TriggerMods};
@@ -40,7 +40,7 @@ fn main() {
         Err(err) => {
             // run_with dropped the Proxy (restoring the terminal) before
             // returning, so this prints cleanly.
-            eprintln!("smartty: {err:#}");
+            eprintln!("proxtty: {err:#}");
             std::process::exit(1);
         }
     }

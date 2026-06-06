@@ -1,6 +1,6 @@
 //! Outer-terminal setup and crash-safe restoration.
 //!
-//! The single most important correctness property of `smartty` is that it must
+//! The single most important correctness property of `proxtty` is that it must
 //! never leave the user's terminal stuck in raw mode (or with mouse reporting on,
 //! or the cursor hidden). If that happens the shell becomes unusable until
 //! `reset` / `stty sane`. We guard against it on three paths: normal exit (Drop),
@@ -10,11 +10,11 @@
 //! friends. We enable only button tracking (`?1000`) plus SGR encoding (`?1006`)
 //! — not any-motion tracking — to avoid a flood of motion reports.
 //!
-//! `smartty` also switches the outer terminal to its **alternate screen**. Since
+//! `proxtty` also switches the outer terminal to its **alternate screen**. Since
 //! it parses child output into its own screen buffer and repaints from there, it
 //! is effectively a full-screen app (like `vim`/`tmux`); using the alt screen
-//! means the outer terminal keeps no native scrollback to fight `smartty`'s own
-//! wheel scrollback, and the user's pre-`smartty` screen is restored on exit.
+//! means the outer terminal keeps no native scrollback to fight `proxtty`'s own
+//! wheel scrollback, and the user's pre-`proxtty` screen is restored on exit.
 
 use std::io::{self, Write};
 
@@ -22,14 +22,14 @@ use crossterm::terminal;
 
 /// Switch to the alternate screen and enable button + SGR mouse reporting.
 const SETUP: &[u8] = b"\x1b[?1049h\x1b[?1000h\x1b[?1006h";
-/// Undo everything `smartty` turned on: mouse reporting, input modes mirrored
+/// Undo everything `proxtty` turned on: mouse reporting, input modes mirrored
 /// from the child (bracketed paste, application cursor/keypad), the cursor shape,
 /// show the cursor, then leave the alternate screen (restoring the user's
 /// original screen). The alt-screen exit comes last so the resets apply first.
 const TEARDOWN_VISUALS: &[u8] =
     b"\x1b[?1006l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?2004l\x1b[?1l\x1b>\x1b[0 q\x1b[?25h\x1b[?1049l";
 
-/// RAII guard that puts the outer terminal into the mode `smartty` needs and
+/// RAII guard that puts the outer terminal into the mode `proxtty` needs and
 /// restores it on drop. Dropping is idempotent — calling [`RawModeGuard::restore`]
 /// early is safe and Drop will then do nothing more.
 pub struct RawModeGuard {

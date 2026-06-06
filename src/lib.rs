@@ -1,14 +1,14 @@
-//! smartty — a smart PTY proxy as a library.
+//! proxtty — a smart PTY proxy as a library.
 //!
 //! [`Proxy`] wraps an interactive command in a pseudo-terminal: it forwards
 //! terminal I/O, lets you decide per input event whether it reaches the child,
 //! and gives you one overlay layer to render on top of the live child screen.
-//! The bundled `smartty` binary is just one consumer of this library (it adds a
+//! The bundled `proxtty` binary is just one consumer of this library (it adds a
 //! context menu); see `examples/` for minimal standalone usage.
 //!
 //! ```no_run
 //! use std::ops::ControlFlow;
-//! use smartty::{Proxy, ProxyConfig, ProxyEvent, InputEvent};
+//! use proxtty::{Proxy, ProxyConfig, ProxyEvent, InputEvent};
 //!
 //! let proxy = Proxy::start(&["zsh".into()], ProxyConfig::default())?;
 //! let code = proxy.run_with(|proxy, event| match event {

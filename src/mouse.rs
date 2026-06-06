@@ -1,12 +1,12 @@
 //! Forwarding outer-terminal mouse events to the child.
 //!
-//! Milestone 9. The outer terminal reports mouse activity to `smartty` (so it can
-//! catch the Option-click trigger). When `smartty` doesn't want an event itself
+//! Milestone 9. The outer terminal reports mouse activity to `proxtty` (so it can
+//! catch the Option-click trigger). When `proxtty` doesn't want an event itself
 //! and the child has asked for mouse reporting, the event is re-encoded in the
 //! child's requested protocol and forwarded — so clicking/scrolling reaches apps
 //! like `vim`, `tmux`, `less` and `fzf`.
 //!
-//! `smartty` keeps the outer terminal in normal button-tracking mode, so it only
+//! `proxtty` keeps the outer terminal in normal button-tracking mode, so it only
 //! ever sees press/release/scroll — not motion. Forwarding drag/motion would
 //! require mirroring the child's motion mode onto the outer terminal; that's left
 //! for later. The encoders below still handle motion bytes for completeness.
@@ -15,7 +15,7 @@ use vt100::{MouseProtocolEncoding, MouseProtocolMode};
 
 use crate::input::{MouseButton, MouseEvent, MouseKind};
 
-/// The motion-tracking level smartty enables on the *outer* terminal, on top of
+/// The motion-tracking level proxtty enables on the *outer* terminal, on top of
 /// the always-on button tracking (`?1000`) it needs for its own trigger.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OuterMotion {
@@ -38,7 +38,7 @@ pub fn desired_motion(mode: MouseProtocolMode) -> OuterMotion {
 }
 
 /// Escape codes to move the outer terminal's motion tracking `from` -> `to`.
-/// `?1000` stays on throughout (smartty's trigger needs it), so this only toggles
+/// `?1000` stays on throughout (proxtty's trigger needs it), so this only toggles
 /// the `?1002`/`?1003` overlay.
 pub fn motion_transition(from: OuterMotion, to: OuterMotion) -> Vec<u8> {
     let mut seq = Vec::new();

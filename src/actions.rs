@@ -9,7 +9,7 @@ use base64::Engine;
 
 /// Build an OSC 52 sequence asking the terminal to put `text` on the system
 /// clipboard. This works even over SSH, because the *outer* terminal performs
-/// the copy when `smartty` writes the sequence to it.
+/// the copy when `proxtty` writes the sequence to it.
 pub fn osc52_copy(text: &str) -> Vec<u8> {
     let encoded = STANDARD.encode(text.as_bytes());
     format!("\x1b]52;c;{encoded}\x07").into_bytes()

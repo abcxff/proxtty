@@ -278,7 +278,7 @@ impl Proxy {
                         // arrow keys, like a normal terminal does.
                         self.send_scroll_arrows(m.kind);
                     } else {
-                        // Normal screen: drive smartty's own scrollback.
+                        // Normal screen: drive proxtty's own scrollback.
                         self.scroll(m.kind);
                     }
                 } else {

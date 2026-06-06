@@ -1,7 +1,7 @@
 //! Input tap over the raw outer-terminal byte stream.
 //!
 //! Rather than convert keystrokes to structured events and re-encode them (lossy
-//! and easy to get wrong), `smartty` keeps the high-fidelity raw-byte passthrough
+//! and easy to get wrong), `proxtty` keeps the high-fidelity raw-byte passthrough
 //! that Milestone 1 validated and *taps* the stream: it recognizes only the two
 //! things it cares about — the local hotkey byte and SGR mouse reports — and
 //! forwards everything else verbatim to the child.

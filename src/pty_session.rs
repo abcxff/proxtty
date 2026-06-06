@@ -1,7 +1,7 @@
 //! Child process running inside a pseudo-terminal.
 //!
 //! Wraps `portable-pty` to spawn the requested command attached to a PTY whose
-//! master side `smartty` controls. The master is kept behind an `Arc<Mutex<_>>`
+//! master side `proxtty` controls. The master is kept behind an `Arc<Mutex<_>>`
 //! so the resize handler thread can adjust the window size while the I/O threads
 //! own the reader and writer halves.
 

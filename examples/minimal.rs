@@ -1,4 +1,4 @@
-//! Minimal smartty library usage.
+//! Minimal proxtty library usage.
 //!
 //! Forwards every input to the child except the hotkey (Ctrl-Space), which
 //! toggles a tiny overlay box on top of the live session.
@@ -7,7 +7,7 @@
 
 use std::ops::ControlFlow;
 
-use smartty::{InputEvent, Proxy, ProxyConfig, ProxyEvent};
+use proxtty::{InputEvent, Proxy, ProxyConfig, ProxyEvent};
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -24,7 +24,7 @@ fn main() -> anyhow::Result<()> {
         ProxyEvent::Input(InputEvent::Hotkey) => {
             shown = !shown;
             if shown {
-                proxy.set_overlay(b"\x1b[?25l\x1b[2;3H\x1b[7m hello from smartty \x1b[0m");
+                proxy.set_overlay(b"\x1b[?25l\x1b[2;3H\x1b[7m hello from proxtty \x1b[0m");
             } else {
                 proxy.clear_overlay();
             }

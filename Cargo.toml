@@ -1,16 +1,16 @@
 [package]
-name = "smartty"
+name = "proxtty"
 version = "0.1.0"
 edition = "2021"
 description = "A smart PTY proxy that wraps an interactive command, forwards terminal I/O, intercepts local input events, and renders overlay UI on top of the child terminal session."
 license = "MIT"
 
 [lib]
-name = "smartty"
+name = "proxtty"
 path = "src/lib.rs"
 
 [[bin]]
-name = "smartty"
+name = "proxtty"
 path = "src/main.rs"
 
 [dependencies]

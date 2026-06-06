@@ -13,7 +13,7 @@
 use std::collections::VecDeque;
 use std::ops::ControlFlow;
 
-use smartty::{InputEvent, MouseKind, Proxy, ProxyConfig, ProxyEvent};
+use proxtty::{InputEvent, MouseKind, Proxy, ProxyConfig, ProxyEvent};
 
 /// How many recent mouse positions to keep in the trail.
 const TRAIL: usize = 16;
