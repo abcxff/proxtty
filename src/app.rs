@@ -311,6 +311,7 @@ impl App {
     /// Return the view to the live bottom and repaint, if it was scrolled back.
     fn snap_to_bottom(&mut self) {
         if self.scroll_offset != 0 {
+            crate::debug::msg(&format!("snap_to_bottom from offset {}", self.scroll_offset));
             self.scroll_offset = self.screen.scroll_to(0);
             self.renderer.repaint(self.screen.current());
             self.dirty = false;
@@ -325,7 +326,12 @@ impl App {
             MouseKind::ScrollDown => self.scroll_offset.saturating_sub(STEP),
             _ => return,
         };
+        let before = self.scroll_offset;
         self.scroll_offset = self.screen.scroll_to(target);
+        crate::debug::msg(&format!(
+            "scroll {kind:?}: offset {before} -> target {target} -> actual {}",
+            self.scroll_offset
+        ));
         // Repaint the (possibly frozen) view. Once back at the live bottom this
         // shows current output and normal diff rendering resumes.
         self.renderer.repaint(self.screen.current());
@@ -471,6 +477,7 @@ fn spawn_stdin_reader(tx: SyncSender<AppEvent>, hotkey: u8) {
             match handle.read(&mut buf) {
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
+                    crate::debug::raw(&buf[..n]);
                     for ev in parser.feed(&buf[..n]) {
                         if tx.send(AppEvent::Input(ev)).is_err() {
                             return;

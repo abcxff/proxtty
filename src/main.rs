@@ -8,6 +8,7 @@ mod actions;
 mod app;
 mod cli;
 mod config;
+mod debug;
 mod input;
 mod mouse;
 mod overlay;

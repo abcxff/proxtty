@@ -83,6 +83,12 @@ action = "send"
 text   = "clear\n"
 ```
 
+## Debugging
+
+Set `SMARTTY_DEBUG=/path/to/log` to append a diagnostic trace (raw input bytes,
+scroll reactions) to a file — useful since stderr is on the alternate screen
+while running. No overhead when unset.
+
 ## Known limitations
 
 - `smartty` runs as a full-screen app on the outer terminal's alternate screen,

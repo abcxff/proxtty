@@ -35,6 +35,9 @@ pub enum MouseKind {
     Moved,
     ScrollUp,
     ScrollDown,
+    /// Horizontal wheel (trackpads emit these alongside vertical scrolling).
+    ScrollLeft,
+    ScrollRight,
 }
 
 /// A decoded SGR mouse report. Coordinates are 0-based (column, row).
@@ -202,10 +205,14 @@ fn parse_sgr_mouse(seq: &[u8]) -> Option<MouseEvent> {
     let low = cb & 3;
 
     let (kind, button) = if wheel {
-        let kind = if low == 0 {
-            MouseKind::ScrollUp
-        } else {
-            MouseKind::ScrollDown
+        // SGR wheel encodes direction in the low two bits: 0 up, 1 down, 2 left,
+        // 3 right. Misreading left/right (which trackpads emit during a vertical
+        // swipe) as "down" was the cause of scroll jitter.
+        let kind = match low {
+            0 => MouseKind::ScrollUp,
+            1 => MouseKind::ScrollDown,
+            2 => MouseKind::ScrollLeft,
+            _ => MouseKind::ScrollRight,
         };
         (kind, MouseButton::None)
     } else {
@@ -354,6 +361,19 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn wheel_directions() {
+        // The regression: Cb 66/67 are horizontal wheel, not ScrollDown.
+        let kind = |bytes: &[u8]| match parse(&[bytes])[0] {
+            InputEvent::Mouse(m) => m.kind,
+            _ => panic!("expected mouse"),
+        };
+        assert_eq!(kind(b"\x1b[<64;1;1M"), MouseKind::ScrollUp);
+        assert_eq!(kind(b"\x1b[<65;1;1M"), MouseKind::ScrollDown);
+        assert_eq!(kind(b"\x1b[<66;1;1M"), MouseKind::ScrollLeft);
+        assert_eq!(kind(b"\x1b[<67;1;1M"), MouseKind::ScrollRight);
     }
 
     #[test]

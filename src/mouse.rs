@@ -17,19 +17,20 @@ use crate::input::{MouseButton, MouseEvent, MouseKind};
 
 /// Whether an event of `kind` should be forwarded under the child's `mode`.
 pub fn should_forward(mode: MouseProtocolMode, kind: MouseKind) -> bool {
-    let press_release = matches!(
+    let wheel = matches!(
         kind,
-        MouseKind::Down | MouseKind::Up | MouseKind::ScrollUp | MouseKind::ScrollDown
+        MouseKind::ScrollUp | MouseKind::ScrollDown | MouseKind::ScrollLeft | MouseKind::ScrollRight
     );
     match mode {
         MouseProtocolMode::None => false,
         // X10: report only presses (and wheel).
-        MouseProtocolMode::Press => matches!(
-            kind,
-            MouseKind::Down | MouseKind::ScrollUp | MouseKind::ScrollDown
-        ),
-        MouseProtocolMode::PressRelease => press_release,
-        MouseProtocolMode::ButtonMotion => press_release || kind == MouseKind::Drag,
+        MouseProtocolMode::Press => kind == MouseKind::Down || wheel,
+        MouseProtocolMode::PressRelease => {
+            matches!(kind, MouseKind::Down | MouseKind::Up) || wheel
+        }
+        MouseProtocolMode::ButtonMotion => {
+            matches!(kind, MouseKind::Down | MouseKind::Up | MouseKind::Drag) || wheel
+        }
         MouseProtocolMode::AnyMotion => true,
     }
 }
@@ -69,6 +70,8 @@ fn button_byte(m: &MouseEvent) -> u32 {
     let mut cb = match m.kind {
         MouseKind::ScrollUp => 64,
         MouseKind::ScrollDown => 65,
+        MouseKind::ScrollLeft => 66,
+        MouseKind::ScrollRight => 67,
         _ => match m.button {
             MouseButton::Left => 0,
             MouseButton::Middle => 1,
