@@ -12,9 +12,10 @@ use std::rc::Rc;
 
 use vt100::{Callbacks, Parser};
 
-/// Lines of scrollback retained by the parser (Milestone 11). Bounded so the
-/// per-frame screen clone used for diff rendering stays affordable.
-const SCROLLBACK: usize = 1000;
+/// Lines of scrollback retained by the parser (Milestone 11). The diff renderer
+/// clones the screen (including scrollback) per changed frame, so this also sets
+/// the per-frame copy cost under heavy output.
+const SCROLLBACK: usize = 10_000;
 
 /// A parsed model of the child's terminal screen.
 pub struct TerminalScreen {
