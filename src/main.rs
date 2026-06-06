@@ -6,6 +6,8 @@
 
 mod app;
 mod cli;
+mod input;
+mod overlay;
 mod pty_session;
 mod term;
 

@@ -39,8 +39,19 @@ top
 ## Current status
 
 Implemented: transparent passthrough proxy with crash-safe terminal
-restoration and live resize forwarding (Milestones 1–3). Local input
-interception and overlays are not wired up yet.
+restoration and live resize forwarding (Milestones 1–3), plus local input
+interception and a crude context-menu overlay (Milestones 4–5).
+
+Press **Ctrl-Space** (or **Option-click** / Ctrl-click / right-click) to open
+the menu; arrow keys or `j`/`k` move, Enter selects (placeholder), Esc or a
+click outside closes.
+
+Known limitations until the screen-buffer milestones (6–8):
+
+- Closing the menu leaves a blank rectangle where it was — `smartty` can't yet
+  redraw what was underneath.
+- While `smartty` runs, the terminal's mouse is captured: child apps don't
+  receive clicks yet (Milestone 9), and wheel-scroll is intercepted.
 
 ## Recovering a stuck terminal
 

@@ -13,6 +13,9 @@ use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize}
 /// A shareable handle to the PTY master, used for resizing from other threads.
 pub type MasterHandle = Arc<Mutex<Box<dyn MasterPty + Send>>>;
 
+/// A spawned session plus its master reader (child → us) and writer (us → child).
+type SpawnResult = (PtySession, Box<dyn Read + Send>, Box<dyn Write + Send>);
+
 /// A spawned child attached to a PTY.
 pub struct PtySession {
     master: MasterHandle,
@@ -27,11 +30,7 @@ impl PtySession {
     /// (our input → child). The reader and writer are handed to dedicated I/O
     /// threads; the session retains the master for resizing and the child handle
     /// for lifecycle management.
-    pub fn spawn(
-        program: &str,
-        args: &[String],
-        size: PtySize,
-    ) -> anyhow::Result<(PtySession, Box<dyn Read + Send>, Box<dyn Write + Send>)> {
+    pub fn spawn(program: &str, args: &[String], size: PtySize) -> anyhow::Result<SpawnResult> {
         let pty_system = native_pty_system();
         let pair = pty_system.openpty(size)?;
 
