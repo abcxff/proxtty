@@ -38,18 +38,20 @@ top
 
 ## Current status
 
-Implemented: transparent passthrough proxy with crash-safe terminal
-restoration and live resize forwarding (Milestones 1–3), plus local input
-interception and a crude context-menu overlay (Milestones 4–5).
+Implemented (Milestones 1–8): transparent proxy with crash-safe terminal
+restoration and live resize; local input interception; and a context-menu
+overlay composited over a parsed (`vt100`) screen buffer, so closing it
+repaints the child screen cleanly with no leftover artifacts.
 
 Press **Ctrl-Space** (or **Option-click** / Ctrl-click / right-click) to open
 the menu; arrow keys or `j`/`k` move, Enter selects (placeholder), Esc or a
 click outside closes.
 
-Known limitations until the screen-buffer milestones (6–8):
+Known limitations (addressed by later milestones):
 
-- Closing the menu leaves a blank rectangle where it was — `smartty` can't yet
-  redraw what was underneath.
+- `smartty` now owns the visible screen and repaints from its buffer; the outer
+  terminal's native scrollback no longer accumulates child output (scrollback is
+  Milestone 11).
 - While `smartty` runs, the terminal's mouse is captured: child apps don't
   receive clicks yet (Milestone 9), and wheel-scroll is intercepted.
 

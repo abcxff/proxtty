@@ -1,10 +1,10 @@
 //! Local overlay UI.
 //!
-//! Milestone 5 is the *crude* overlay: a menu drawn with raw ANSI escapes, with
-//! no knowledge of what's underneath it. It opens, takes over input, and on close
-//! erases its own area and restores the cursor. Because there's no screen buffer
-//! yet, closing leaves a blank rectangle where the menu was — that hole is fixed
-//! in Milestones 6–8 once `smartty` parses the child screen and can recomposite.
+//! The menu is drawn with raw ANSI escapes on top of the already-painted child
+//! screen. Since Milestone 8 it no longer erases itself on close: the renderer
+//! owns a parsed copy of the child screen and simply repaints it, which wipes the
+//! menu cleanly with no leftover rectangle. This module therefore only knows how
+//! to *draw* the menu and route input to it.
 
 use crate::input::{InputEvent, MouseButton, MouseEvent, MouseKind};
 
@@ -99,9 +99,10 @@ fn goto(row: u16, col: u16) -> String {
     format!("\x1b[{row};{col}H")
 }
 
-/// Bytes to emit when first opening the menu: save the cursor, hide it, draw.
+/// Bytes to emit when first opening the menu: hide the cursor, then draw. The
+/// cursor is restored by the renderer's repaint when the menu closes.
 pub fn open_sequence(menu: &MenuState) -> Vec<u8> {
-    let mut s = String::from("\x1b7\x1b[?25l"); // DECSC + hide cursor
+    let mut s = String::from("\x1b[?25l"); // hide cursor
     s.push_str(&draw_box(menu));
     s.into_bytes()
 }
@@ -111,16 +112,11 @@ pub fn redraw_sequence(menu: &MenuState) -> Vec<u8> {
     draw_box(menu).into_bytes()
 }
 
-/// Bytes to emit when closing: erase the menu area, restore and show the cursor.
-pub fn close_sequence(menu: &MenuState) -> Vec<u8> {
-    let mut s = clear_box(menu);
-    s.push_str("\x1b8\x1b[?25h"); // DECRC + show cursor
-    s.into_bytes()
-}
-
 fn draw_box(menu: &MenuState) -> String {
     let inner = inner_width();
-    let mut s = String::new();
+    // Start from default attributes so the box never inherits the child's
+    // current colors/styles.
+    let mut s = String::from("\x1b[0m");
 
     // Top border.
     s.push_str(&goto(menu.row, menu.col));
@@ -138,7 +134,7 @@ fn draw_box(menu: &MenuState) -> String {
         if i == menu.selected {
             s.push_str("\x1b[7m");
             s.push_str(&label);
-            s.push_str("\x1b[27m");
+            s.push_str("\x1b[0m");
         } else {
             s.push_str(&label);
         }
@@ -153,16 +149,6 @@ fn draw_box(menu: &MenuState) -> String {
     }
     s.push('┘');
 
-    s
-}
-
-fn clear_box(menu: &MenuState) -> String {
-    let blanks = " ".repeat(box_width());
-    let mut s = String::new();
-    for r in 0..box_height() as u16 {
-        s.push_str(&goto(menu.row + r, menu.col));
-        s.push_str(&blanks);
-    }
     s
 }
 

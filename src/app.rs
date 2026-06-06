@@ -1,10 +1,16 @@
 //! The proxy event loop.
 //!
-//! Milestones 1–3 were a pair of dumb byte pumps. Milestones 4–5 add local input
-//! interception and a crude overlay, which require a single owner of application
-//! state. So I/O now flows as [`AppEvent`]s into one event loop on the main
-//! thread, which decides — per the input policy — whether to forward input to the
-//! child, open/close the overlay, or route input to an open overlay.
+//! Output no longer goes straight to stdout: it flows through a `vt100` parser
+//! ([`TerminalScreen`]) and is painted by the [`Renderer`], which keeps a copy of
+//! what's on screen so it can diff (fast incremental paints) or repaint (clean
+//! slate). That parsed screen is what makes overlay compositing clean — the menu
+//! is drawn on top of the painted screen, and closing it just repaints the child
+//! screen, wiping the menu with no leftover rectangle.
+//!
+//! Rendering is *coalesced*: a burst of output events updates the screen buffer
+//! and marks it dirty, then a single paint happens once the burst drains. While
+//! an overlay is open, painting is deferred entirely and the screen is repainted
+//! on close.
 //!
 //! Threading model:
 //!   - reader thread: PTY master  → `AppEvent::Output`
@@ -27,6 +33,8 @@ use crate::cli::Cli;
 use crate::input::{InputEvent, InputParser, MouseButton, MouseEvent, MouseKind};
 use crate::overlay::{self, MenuOutcome, MenuState, Overlay};
 use crate::pty_session::{self, MasterHandle, PtySession};
+use crate::renderer::Renderer;
+use crate::screen::TerminalScreen;
 use crate::term::RawModeGuard;
 
 /// Local trigger byte. Ctrl-Space (NUL) by default; configurable in Milestone 14.
@@ -41,7 +49,15 @@ enum AppEvent {
 
 /// Run the proxy for `cli`'s command. Returns the child's exit code.
 pub fn run(cli: &Cli) -> anyhow::Result<i32> {
-    let (cols, rows) = terminal::size().unwrap_or((80, 24));
+    // A terminal that reports a zero dimension (or no size at all) would make the
+    // screen model degenerate, so fall back to a sane default.
+    let (mut cols, mut rows) = terminal::size().unwrap_or((80, 24));
+    if cols == 0 {
+        cols = 80;
+    }
+    if rows == 0 {
+        rows = 24;
+    }
     let size = PtySize {
         rows,
         cols,
@@ -82,10 +98,21 @@ pub fn run(cli: &Cli) -> anyhow::Result<i32> {
             break 130;
         }
         match rx.recv_timeout(Duration::from_millis(10)) {
-            Ok(event) => app.handle(event),
+            Ok(event) => {
+                app.handle(event);
+                // Drain the rest of the burst before painting once.
+                while let Ok(event) = rx.try_recv() {
+                    app.handle(event);
+                }
+                app.flush_render();
+            }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => {
-                break session.child.try_wait()?.map(|s| s.exit_code() as i32).unwrap_or(1);
+                break session
+                    .child
+                    .try_wait()?
+                    .map(|s| s.exit_code() as i32)
+                    .unwrap_or(1);
             }
         }
     };
@@ -100,11 +127,13 @@ pub fn run(cli: &Cli) -> anyhow::Result<i32> {
 struct App {
     size: (u16, u16),
     overlay: Overlay,
+    /// Input to forward to the child PTY.
     writer: Box<dyn Write + Send>,
-    out: io::Stdout,
     master: MasterHandle,
-    /// Child output captured while an overlay is open, replayed on close.
-    buffered: Vec<u8>,
+    screen: TerminalScreen,
+    renderer: Renderer,
+    /// The screen buffer changed since the last paint.
+    dirty: bool,
 }
 
 /// Result of dispatching an input event to an open overlay.
@@ -119,38 +148,45 @@ enum OverlayAct {
 
 impl App {
     fn new(size: (u16, u16), writer: Box<dyn Write + Send>, master: MasterHandle) -> App {
+        let (cols, rows) = size;
         App {
             size,
             overlay: Overlay::None,
             writer,
-            out: io::stdout(),
             master,
-            buffered: Vec::new(),
+            screen: TerminalScreen::new(rows, cols),
+            renderer: Renderer::new(rows, cols),
+            dirty: false,
         }
     }
 
     fn handle(&mut self, event: AppEvent) {
         match event {
-            AppEvent::Output(bytes) => self.on_output(bytes),
+            AppEvent::Output(bytes) => self.on_output(&bytes),
             AppEvent::Input(ev) => self.on_input(ev),
             AppEvent::Resize(cols, rows) => self.on_resize(cols, rows),
         }
     }
 
-    fn on_output(&mut self, bytes: Vec<u8>) {
-        if self.overlay.is_open() {
-            // Suppress display while the overlay is up; replay on close.
-            self.buffered.extend_from_slice(&bytes);
-        } else {
-            let _ = self.out.write_all(&bytes);
-            let _ = self.out.flush();
+    /// Update the screen buffer; defer painting to `flush_render`.
+    fn on_output(&mut self, bytes: &[u8]) {
+        self.screen.process(bytes);
+        self.dirty = true;
+    }
+
+    /// Paint pending output, unless an overlay is up (then it waits for close).
+    fn flush_render(&mut self) {
+        if self.dirty && !self.overlay.is_open() {
+            self.renderer.render(self.screen.current());
+            self.dirty = false;
         }
     }
 
     fn on_input(&mut self, ev: InputEvent) {
-        // First, give an open overlay a chance to consume the event. The borrow
-        // of `self.overlay` ends with this expression so we can mutate `self`
-        // afterward to redraw/close.
+        // Bring the screen current before acting on input, so an overlay opens
+        // over a freshly-painted screen.
+        self.flush_render();
+
         let act = if let Overlay::Menu(menu) = &mut self.overlay {
             match overlay::handle(menu, &ev) {
                 MenuOutcome::Stay => OverlayAct::Redraw(overlay::redraw_sequence(menu)),
@@ -162,7 +198,7 @@ impl App {
         };
 
         match act {
-            OverlayAct::Redraw(seq) => self.write_raw(&seq),
+            OverlayAct::Redraw(seq) => self.renderer.write_raw(&seq),
             OverlayAct::Close => self.close_overlay(),
             OverlayAct::NotOpen => self.on_input_ground(ev),
         }
@@ -187,31 +223,27 @@ impl App {
 
     fn on_resize(&mut self, cols: u16, rows: u16) {
         self.size = (cols, rows);
+        self.screen.resize(rows, cols);
         pty_session::resize(&self.master, rows, cols);
-        // The crude overlay can't reflow against a resized screen, so dismiss it.
-        if self.overlay.is_open() {
-            self.close_overlay();
-        }
+        // Dismiss the overlay (its geometry no longer fits) and repaint the
+        // resized screen cleanly.
+        self.overlay = Overlay::None;
+        self.renderer.repaint(self.screen.current());
+        self.dirty = false;
     }
 
     fn open_overlay(&mut self, anchor: (u16, u16)) {
         let menu = MenuState::new(anchor.0, anchor.1, self.size);
         let seq = overlay::open_sequence(&menu);
         self.overlay = Overlay::Menu(menu);
-        self.write_raw(&seq);
+        self.renderer.write_raw(&seq);
     }
 
+    /// Close the overlay and repaint the child screen, which erases the menu.
     fn close_overlay(&mut self) {
-        if let Overlay::Menu(menu) = std::mem::replace(&mut self.overlay, Overlay::None) {
-            let seq = overlay::close_sequence(&menu);
-            self.write_raw(&seq);
-        }
-        // Replay whatever the child emitted while the overlay was up.
-        if !self.buffered.is_empty() {
-            let buffered = std::mem::take(&mut self.buffered);
-            let _ = self.out.write_all(&buffered);
-            let _ = self.out.flush();
-        }
+        self.overlay = Overlay::None;
+        self.renderer.repaint(self.screen.current());
+        self.dirty = false;
     }
 
     /// Restore the screen if we exit with the overlay still open.
@@ -219,11 +251,6 @@ impl App {
         if self.overlay.is_open() {
             self.close_overlay();
         }
-    }
-
-    fn write_raw(&mut self, bytes: &[u8]) {
-        let _ = self.out.write_all(bytes);
-        let _ = self.out.flush();
     }
 }
 

@@ -9,6 +9,8 @@ mod cli;
 mod input;
 mod overlay;
 mod pty_session;
+mod renderer;
+mod screen;
 mod term;
 
 use cli::Cli;
