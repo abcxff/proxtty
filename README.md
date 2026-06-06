@@ -7,9 +7,6 @@ of the child terminal session.
 The motivating use case: run `ssh` inside a shell inside `smartty`, then
 Option-click anywhere to open a local contextual menu over the remote session.
 
-See [VISION.md](VISION.md) for the full design and [TODO.md](TODO.md) for the
-roadmap.
-
 > ## ⚠️ Tested on macOS + Ghostty only
 >
 > smartty was **developed and tested exclusively on macOS using the
