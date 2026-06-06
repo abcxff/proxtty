@@ -91,6 +91,11 @@ text   = "clear\n"
 - Only press/release/scroll mouse events are forwarded to the child — drag/motion
   isn't yet (would require mirroring the child's motion-tracking mode onto the
   terminal).
+- Focus reporting (`CSI ?1004`) is not propagated to the child, so apps that
+  redraw on focus change won't see focus events.
+
+Window title, child-initiated clipboard (OSC 52), the bell, and cursor shape
+(`DECSCUSR`) are passed through to the outer terminal.
 
 ## Recovering a stuck terminal
 

@@ -204,6 +204,13 @@ impl App {
     /// Update the screen buffer; defer painting to `flush_render`.
     fn on_output(&mut self, bytes: &[u8]) {
         self.screen.process(bytes);
+        // Forward out-of-band sequences vt100 doesn't model (title, clipboard,
+        // bell, cursor shape) to the outer terminal. They don't touch the grid,
+        // so they're safe to emit immediately, even with an overlay open.
+        let passthrough = self.screen.take_passthrough();
+        if !passthrough.is_empty() {
+            self.renderer.write_raw(&passthrough);
+        }
         self.dirty = true;
     }
 
