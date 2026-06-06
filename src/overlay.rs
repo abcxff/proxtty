@@ -1,24 +1,11 @@
-//! Local overlay UI.
+//! Local overlay UI (a context menu) — a consumer of the `smartty` proxy library.
 //!
-//! The menu is drawn with raw ANSI escapes on top of the already-painted child
-//! screen. It doesn't erase itself on close: the renderer owns a parsed copy of
-//! the child screen and repaints it, wiping the menu cleanly. This module only
-//! knows how to *draw* the menu and route input to it. Item labels come from the
-//! user's config (Milestone 14); what each item does is decided by the app.
+//! The menu is drawn with raw ANSI escapes and handed to `Proxy::set_overlay`,
+//! which composites it over the live child screen; `Proxy::clear_overlay` wipes
+//! it. This module only knows how to *draw* the menu and route input to it. Item
+//! labels come from the user's config; what each item does is decided by `main`.
 
-use crate::input::{InputEvent, MouseButton, MouseEvent, MouseKind};
-
-/// The currently active overlay, if any.
-pub enum Overlay {
-    None,
-    Menu(MenuState),
-}
-
-impl Overlay {
-    pub fn is_open(&self) -> bool {
-        !matches!(self, Overlay::None)
-    }
-}
+use smartty::{InputEvent, MouseButton, MouseEvent, MouseKind};
 
 /// State of an open context menu. Screen coordinates are 1-based (top-left of
 /// the box), already clamped to fit within the terminal.

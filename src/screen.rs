@@ -12,11 +12,6 @@ use std::rc::Rc;
 
 use vt100::{Callbacks, Parser};
 
-/// Lines of scrollback retained by the parser (Milestone 11). The diff renderer
-/// clones the screen (including scrollback) per changed frame, so this also sets
-/// the per-frame copy cost under heavy output.
-const SCROLLBACK: usize = 10_000;
-
 /// A parsed model of the child's terminal screen.
 pub struct TerminalScreen {
     parser: Parser<PassThrough>,
@@ -25,13 +20,16 @@ pub struct TerminalScreen {
 }
 
 impl TerminalScreen {
-    pub fn new(rows: u16, cols: u16) -> TerminalScreen {
+    /// Create a screen of `rows` x `cols` retaining `scrollback` lines of history.
+    /// The diff renderer clones the screen (including scrollback) per changed
+    /// frame, so `scrollback` also sets the per-frame copy cost under heavy output.
+    pub fn new(rows: u16, cols: u16, scrollback: usize) -> TerminalScreen {
         let passthrough = Rc::new(RefCell::new(Vec::new()));
         let callbacks = PassThrough {
             out: Rc::clone(&passthrough),
         };
         TerminalScreen {
-            parser: Parser::new_with_callbacks(rows, cols, SCROLLBACK, callbacks),
+            parser: Parser::new_with_callbacks(rows, cols, scrollback, callbacks),
             passthrough,
         }
     }

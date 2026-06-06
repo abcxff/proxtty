@@ -32,6 +32,9 @@ Option-click anywhere to open a local contextual menu over the remote session.
 - **Crash-safe.** The terminal is restored on every exit path — normal exit,
   child exit, signals, and panics.
 
+smartty is a **library** (the proxy) plus a thin **binary** (the menu). The
+binary is just one consumer of the library — see [Use as a library](#use-as-a-library).
+
 ## Build
 
 Requires a Rust toolchain.
@@ -98,6 +101,45 @@ action = "open_url"
 label  = "Send: clear"
 action = "send"
 text   = "clear\n"
+```
+
+## Use as a library
+
+The proxy is a crate you can build your own terminal-overlay tools on. The
+contract is small and un-opinionated:
+
+- **You decide what passes through.** Every input event is surfaced; call
+  `forward()` for the ones that should reach the child, and consume the rest.
+- **One overlay layer, empty by default.** `set_overlay(bytes)` draws raw ANSI on
+  top of the live child screen (transparent where you don't draw);
+  `clear_overlay()` returns to emptiness. Purely visual, independent of input.
+- **Opt into `ScreenChanged`** to react when the child repaints (status bars,
+  content-derived overlays).
+
+```rust
+use std::ops::ControlFlow;
+use smartty::{Proxy, ProxyConfig, ProxyEvent, InputEvent};
+
+let proxy = Proxy::start(&["zsh".into()], ProxyConfig::default())?;
+let code = proxy.run_with(|proxy, event| match event {
+    // Ctrl-Space: draw a box instead of passing it to the child.
+    ProxyEvent::Input(InputEvent::Hotkey) => {
+        proxy.set_overlay(b"\x1b[2;3H\x1b[7m hello \x1b[0m");
+        ControlFlow::Continue(())
+    }
+    ProxyEvent::Input(ev) => { proxy.forward(ev); ControlFlow::Continue(()) }
+    ProxyEvent::Exited(code) => ControlFlow::Break(code),
+    _ => ControlFlow::Continue(()),
+})?;
+```
+
+Key methods: `poll` / `run_with` (drive the loop), `forward` (pass an input to
+the child), `set_overlay` / `clear_overlay`, `emit_raw` (OSC 52 etc.),
+`visible_text`, `size`, `send`. Runnable examples:
+
+```sh
+cargo run --example minimal -- zsh     # hotkey toggles a box
+cargo run --example statusbar -- top   # ScreenChanged-driven status bar
 ```
 
 ## Known limitations

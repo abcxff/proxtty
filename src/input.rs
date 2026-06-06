@@ -73,7 +73,8 @@ enum State {
 
 /// Incremental parser tapping the raw input stream.
 pub struct InputParser {
-    hotkey: u8,
+    /// The local trigger byte, or `None` to disable hotkey interception entirely.
+    hotkey: Option<u8>,
     state: State,
     /// The in-progress escape sequence (including the leading `ESC`).
     seq: Vec<u8>,
@@ -84,8 +85,9 @@ pub struct InputParser {
 }
 
 impl InputParser {
-    /// Create a parser whose local trigger is the byte `hotkey`.
-    pub fn new(hotkey: u8) -> InputParser {
+    /// Create a parser whose local trigger is the byte `hotkey` (or `None` to
+    /// disable hotkey interception, so every byte is forwarded).
+    pub fn new(hotkey: Option<u8>) -> InputParser {
         InputParser {
             hotkey,
             state: State::Ground,
@@ -114,7 +116,7 @@ impl InputParser {
     fn byte(&mut self, b: u8) {
         match self.state {
             State::Ground => {
-                if b == self.hotkey {
+                if self.hotkey == Some(b) {
                     self.flush_forward();
                     self.out.push(InputEvent::Hotkey);
                 } else if b == ESC {
@@ -254,7 +256,7 @@ mod tests {
     const HOTKEY: u8 = 0x00; // Ctrl-Space
 
     fn parse(chunks: &[&[u8]]) -> Vec<InputEvent> {
-        let mut p = InputParser::new(HOTKEY);
+        let mut p = InputParser::new(Some(HOTKEY));
         let mut all = Vec::new();
         for c in chunks {
             all.extend(p.feed(c));

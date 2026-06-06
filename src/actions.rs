@@ -49,6 +49,17 @@ pub fn opener() -> &'static str {
     }
 }
 
+/// Open `url` in the user's default application, reaping the helper process so it
+/// doesn't linger as a zombie.
+pub fn open_url(url: String) {
+    use std::process::Command;
+    if let Ok(mut child) = Command::new(opener()).arg(url).spawn() {
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
