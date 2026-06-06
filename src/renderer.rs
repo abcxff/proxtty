@@ -35,10 +35,13 @@ impl Renderer {
     /// Incrementally paint from the last displayed state to `screen`.
     pub fn render(&mut self, screen: &Screen) {
         let diff = screen.contents_diff(&self.prev);
-        if !diff.is_empty() {
-            let _ = self.out.write_all(&diff);
-            let _ = self.out.flush();
+        if diff.is_empty() {
+            // Nothing changed visibly, so the baseline still matches the display
+            // — skip the (scrollback-sized) clone entirely.
+            return;
         }
+        let _ = self.out.write_all(&diff);
+        let _ = self.out.flush();
         self.prev = screen.clone();
     }
 
