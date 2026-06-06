@@ -7,6 +7,7 @@
 mod app;
 mod cli;
 mod input;
+mod mouse;
 mod overlay;
 mod pty_session;
 mod renderer;

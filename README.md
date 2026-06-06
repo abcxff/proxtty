@@ -38,22 +38,27 @@ top
 
 ## Current status
 
-Implemented (Milestones 1–8): transparent proxy with crash-safe terminal
-restoration and live resize; local input interception; and a context-menu
-overlay composited over a parsed (`vt100`) screen buffer, so closing it
-repaints the child screen cleanly with no leftover artifacts.
+Implemented (Milestones 1–10): transparent proxy with crash-safe terminal
+restoration and live resize; local input interception; a context-menu overlay
+composited over a parsed (`vt100`) screen buffer; mouse forwarding to the child;
+and alternate-screen / input-mode correctness for full-screen apps. This is the
+core "menu over SSH" milestone.
 
-Press **Ctrl-Space** (or **Option-click** / Ctrl-click / right-click) to open
-the menu; arrow keys or `j`/`k` move, Enter selects (placeholder), Esc or a
-click outside closes.
+Press **Ctrl-Space** (or **Option-click** / Ctrl-click) to open the menu; arrow
+keys or `j`/`k` move, Enter selects (placeholder), Esc or a click outside closes.
+
+Mouse clicks and wheel-scroll are forwarded to child apps (`vim`, `tmux`,
+`less`, `fzf`) when they request mouse reporting; only the Option/Ctrl-click
+trigger is held back. The child's application-cursor, keypad, and bracketed-paste
+modes are mirrored onto the outer terminal so keys and pastes encode correctly.
 
 Known limitations (addressed by later milestones):
 
-- `smartty` now owns the visible screen and repaints from its buffer; the outer
+- `smartty` owns the visible screen and repaints from its buffer; the outer
   terminal's native scrollback no longer accumulates child output (scrollback is
   Milestone 11).
-- While `smartty` runs, the terminal's mouse is captured: child apps don't
-  receive clicks yet (Milestone 9), and wheel-scroll is intercepted.
+- Only press/release/scroll mouse events are forwarded — drag/motion isn't yet
+  (would require mirroring the child's motion-tracking mode onto the terminal).
 
 ## Recovering a stuck terminal
 

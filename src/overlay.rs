@@ -166,11 +166,13 @@ fn handle_keys(menu: &mut MenuState, bytes: &[u8]) -> MenuOutcome {
     // Escape as a single byte, so these are unambiguous.
     match bytes {
         [0x1b] => return MenuOutcome::Close,
-        b"\x1b[A" => {
+        // Arrow keys: CSI form, plus the SS3 form used when the child has put the
+        // terminal in application-cursor mode.
+        b"\x1b[A" | b"\x1bOA" => {
             menu.move_up();
             return MenuOutcome::Stay;
         }
-        b"\x1b[B" => {
+        b"\x1b[B" | b"\x1bOB" => {
             menu.move_down();
             return MenuOutcome::Stay;
         }

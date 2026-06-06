@@ -16,8 +16,11 @@ use crossterm::terminal;
 
 /// Enable button + SGR mouse reporting on the outer terminal.
 const ENABLE_MOUSE: &[u8] = b"\x1b[?1000h\x1b[?1006h";
-/// Disable the mouse reporting we turned on, and make sure the cursor is shown.
-const RESTORE_VISUALS: &[u8] = b"\x1b[?1006l\x1b[?1000l\x1b[?25h";
+/// Undo everything `smartty` may have turned on: mouse reporting, plus any input
+/// modes mirrored from the child (bracketed paste, application cursor/keypad),
+/// and make sure the cursor is shown again.
+const RESTORE_VISUALS: &[u8] =
+    b"\x1b[?1006l\x1b[?1000l\x1b[?2004l\x1b[?1l\x1b>\x1b[?25h";
 
 /// RAII guard that puts the outer terminal into the mode `smartty` needs and
 /// restores it on drop. Dropping is idempotent — calling [`RawModeGuard::restore`]

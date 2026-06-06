@@ -31,6 +31,7 @@ use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM, SIGWINCH};
 
 use crate::cli::Cli;
 use crate::input::{InputEvent, InputParser, MouseButton, MouseEvent, MouseKind};
+use crate::mouse;
 use crate::overlay::{self, MenuOutcome, MenuState, Overlay};
 use crate::pty_session::{self, MasterHandle, PtySession};
 use crate::renderer::Renderer;
@@ -134,6 +135,12 @@ struct App {
     renderer: Renderer,
     /// The screen buffer changed since the last paint.
     dirty: bool,
+    /// Last input modes mirrored onto the outer terminal (so its keys/pastes are
+    /// encoded the way the child expects). All start off, matching a fresh raw
+    /// terminal.
+    im_app_cursor: bool,
+    im_app_keypad: bool,
+    im_bracketed_paste: bool,
 }
 
 /// Result of dispatching an input event to an open overlay.
@@ -157,6 +164,9 @@ impl App {
             screen: TerminalScreen::new(rows, cols),
             renderer: Renderer::new(rows, cols),
             dirty: false,
+            im_app_cursor: false,
+            im_app_keypad: false,
+            im_bracketed_paste: false,
         }
     }
 
@@ -176,9 +186,38 @@ impl App {
 
     /// Paint pending output, unless an overlay is up (then it waits for close).
     fn flush_render(&mut self) {
+        self.sync_input_modes();
         if self.dirty && !self.overlay.is_open() {
             self.renderer.render(self.screen.current());
             self.dirty = false;
+        }
+    }
+
+    /// Mirror the child's input modes (application cursor/keypad, bracketed
+    /// paste) onto the outer terminal so the keys and pastes it sends us are
+    /// encoded the way the child expects. Mouse modes are managed separately
+    /// because `smartty` always needs the mouse for its own trigger.
+    fn sync_input_modes(&mut self) {
+        let screen = self.screen.current();
+        let app_cursor = screen.application_cursor();
+        let app_keypad = screen.application_keypad();
+        let bracketed = screen.bracketed_paste();
+
+        let mut seq: Vec<u8> = Vec::new();
+        if app_cursor != self.im_app_cursor {
+            seq.extend_from_slice(if app_cursor { b"\x1b[?1h" } else { b"\x1b[?1l" });
+            self.im_app_cursor = app_cursor;
+        }
+        if app_keypad != self.im_app_keypad {
+            seq.extend_from_slice(if app_keypad { b"\x1b=" } else { b"\x1b>" });
+            self.im_app_keypad = app_keypad;
+        }
+        if bracketed != self.im_bracketed_paste {
+            seq.extend_from_slice(if bracketed { b"\x1b[?2004h" } else { b"\x1b[?2004l" });
+            self.im_bracketed_paste = bracketed;
+        }
+        if !seq.is_empty() {
+            self.renderer.write_raw(&seq);
         }
     }
 
@@ -211,13 +250,27 @@ impl App {
             InputEvent::Mouse(m) if is_overlay_trigger(&m) => {
                 self.open_overlay((m.col + 1, m.row + 1))
             }
-            // Non-trigger mouse events are dropped for now; forwarding them to the
-            // child according to its requested mouse modes is Milestone 9.
-            InputEvent::Mouse(_) => {}
+            // Otherwise hand the event to the child if it has asked for mouse
+            // reporting, re-encoded in its requested protocol.
+            InputEvent::Mouse(m) => self.forward_mouse(&m),
             InputEvent::Forward(bytes) => {
                 let _ = self.writer.write_all(&bytes);
                 let _ = self.writer.flush();
             }
+        }
+    }
+
+    /// Re-encode a mouse event and forward it to the child if it wants mouse.
+    fn forward_mouse(&mut self, m: &MouseEvent) {
+        let screen = self.screen.current();
+        let mode = screen.mouse_protocol_mode();
+        let encoding = screen.mouse_protocol_encoding();
+        if !mouse::should_forward(mode, m.kind) {
+            return;
+        }
+        if let Some(bytes) = mouse::encode(m, encoding) {
+            let _ = self.writer.write_all(&bytes);
+            let _ = self.writer.flush();
         }
     }
 
@@ -259,17 +312,11 @@ fn default_anchor() -> (u16, u16) {
     (3, 2)
 }
 
-/// Does this mouse event open the overlay? Option-click is the primary trigger;
-/// Ctrl-click and right-click are fallbacks for terminals that swallow Alt.
+/// Does this mouse event open the overlay? Option-click is the primary trigger,
+/// Ctrl-click the fallback for terminals that swallow Alt. Plain and right
+/// clicks are intentionally left for the child so its own mouse handling works.
 fn is_overlay_trigger(m: &MouseEvent) -> bool {
-    if m.kind != MouseKind::Down {
-        return false;
-    }
-    match m.button {
-        MouseButton::Left => m.alt || m.ctrl,
-        MouseButton::Right => true,
-        _ => false,
-    }
+    m.kind == MouseKind::Down && m.button == MouseButton::Left && (m.alt || m.ctrl)
 }
 
 /// PTY output → `AppEvent::Output`.
