@@ -27,6 +27,7 @@ fn main() {
         scrollback: 10_000,
         size: None,
         screen_events: false,
+        mouse_motion: false,
     };
 
     let result = Proxy::start(&command, proxy_config).and_then(|proxy| {

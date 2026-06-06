@@ -45,12 +45,15 @@ impl Renderer {
         self.prev = screen.clone();
     }
 
-    /// Full repaint: clear the terminal and redraw `screen` from scratch. This
-    /// is how an overlay is wiped — the menu was drawn on top of the terminal
-    /// but never into `screen`, so repainting the child screen erases it.
-    pub fn repaint(&mut self, screen: &Screen) {
-        let full = screen.contents_formatted();
-        let _ = self.out.write_all(&full);
+    /// Full repaint: clear the terminal and redraw `screen` from scratch, with
+    /// `overlay` bytes appended in the same write so there's no flash between
+    /// clearing the screen and drawing the overlay on top. Pass an empty slice
+    /// for no overlay. This is also how an overlay is wiped — the overlay was
+    /// drawn on top but never into `screen`, so repainting the child erases it.
+    pub fn repaint_with(&mut self, screen: &Screen, overlay: &[u8]) {
+        let mut out = screen.contents_formatted();
+        out.extend_from_slice(overlay);
+        let _ = self.out.write_all(&out);
         let _ = self.out.flush();
         self.prev = screen.clone();
     }

@@ -199,6 +199,12 @@ fn parse_sgr_mouse(seq: &[u8]) -> Option<MouseEvent> {
     let cx: u32 = parts.next()?.parse().ok()?;
     let cy: u32 = parts.next()?.parse().ok()?;
 
+    // SGR coordinates are 1-based; a 0 means out of bounds (e.g. motion past the
+    // screen edge). Drop it rather than clamp it to cell (0, _) / (_, 0).
+    if cx == 0 || cy == 0 {
+        return None;
+    }
+
     let shift = cb & 4 != 0;
     let alt = cb & 8 != 0;
     let ctrl = cb & 16 != 0;
@@ -363,6 +369,16 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn out_of_bounds_coords_dropped() {
+        // A 0 coordinate is out-of-spec (edge/out-of-window motion) -> no event.
+        assert_eq!(parse(&[b"\x1b[<35;0;5M"]), vec![]);
+        assert_eq!(parse(&[b"\x1b[<35;5;0M"]), vec![]);
+        assert_eq!(parse(&[b"\x1b[<35;0;0M"]), vec![]);
+        // The valid top-left cell (1;1) still works.
+        assert!(matches!(parse(&[b"\x1b[<35;1;1M"])[0], InputEvent::Mouse(_)));
     }
 
     #[test]
