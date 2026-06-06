@@ -1,58 +1,78 @@
 # smartty
 
 A smart PTY proxy that wraps an interactive terminal command, forwards terminal
-I/O transparently, and (incrementally) intercepts local input events to render
-overlay UI on top of the child terminal session.
+I/O transparently, intercepts local input events, and renders overlay UI on top
+of the child terminal session.
+
+The motivating use case: run `ssh` inside a shell inside `smartty`, then
+Option-click anywhere to open a local contextual menu over the remote session.
 
 See [VISION.md](VISION.md) for the full design and [TODO.md](TODO.md) for the
 roadmap.
 
-> **Platforms:** Linux and macOS only.
+> ## ⚠️ Tested on macOS + Ghostty only
+>
+> smartty was **developed and tested exclusively on macOS using the
+> [Ghostty](https://ghostty.org) terminal.** That is the only configuration it
+> has been exercised in.
+>
+> The code targets **macOS and Linux**, and the defaults (Option-click trigger,
+> SGR mouse parsing, alternate-screen rendering) are standard enough that other
+> modern terminals — iTerm2, WezTerm, Alacritty, kitty, Terminal.app — and Linux
+> *should* work, but **none of them have been verified.** Expect rough edges
+> outside macOS/Ghostty, especially around mouse and Option/Alt handling.
+
+## What it does
+
+- **Transparent passthrough.** Runs your command in a PTY and forwards I/O both
+  ways, so `ssh`, `vim`, `tmux`, `less`, `fzf`, REPLs, etc. behave normally.
+- **Local overlay menu.** A configurable context menu you can open over any
+  session — including a remote `ssh` one — without the child process seeing it.
+- **Parsed screen model.** Child output is parsed into a virtual screen
+  (`vt100`), so overlays composite cleanly and redraw with no artifacts.
+- **Mouse-aware.** Clicks, scroll, and drags are forwarded to apps that request
+  mouse reporting; otherwise the wheel drives smartty's own scrollback.
+- **Crash-safe.** The terminal is restored on every exit path — normal exit,
+  child exit, signals, and panics.
 
 ## Build
 
+Requires a Rust toolchain.
+
 ```sh
 cargo build            # debug
-cargo build --release  # optimized
+cargo build --release  # optimized → target/release/smartty
 ```
 
-## Run
+## Usage
 
 Wrap any interactive command. With no command, smartty runs your `$SHELL`:
 
 ```sh
 cargo run -- zsh
-cargo run -- -- ssh my-server   # use `--` to pass flags to the child
-./target/debug/smartty zsh
+cargo run -- -- ssh my-server   # use `--` to pass flags through to the child
+./target/release/smartty zsh
 ```
 
-Inside the wrapped shell, normal programs work as usual:
+Inside the wrapped shell, use it like a normal terminal:
 
 ```sh
 ssh my-server
 vim
+tmux
 fzf
-less
-top
 ```
 
-## Current status
+### Keys & mouse
 
-Implemented (Milestones 1–15): transparent proxy with crash-safe terminal
-restoration and live resize; local input interception; a context-menu overlay
-composited over a parsed (`vt100`) screen buffer; mouse forwarding to the child;
-alternate-screen / input-mode correctness for full-screen apps; wheel-driven
-scrollback; configuration; and working menu actions.
-
-Press **Ctrl-Space** (or **Option-click** / Ctrl-click) to open the menu; arrow
-keys or `j`/`k` move, Enter or click selects, Esc or an outside click closes.
-
-Mouse clicks and wheel-scroll are forwarded to child apps (`vim`, `tmux`,
-`less`, `fzf`) when they request mouse reporting; only the Option/Ctrl-click
-trigger is held back. When the child isn't using the mouse, wheel-scroll moves
-through `smartty`'s scrollback. The child's application-cursor, keypad, and
-bracketed-paste modes are mirrored onto the outer terminal so keys and pastes
-encode correctly.
+| Action | Default |
+| --- | --- |
+| Open the menu | **Ctrl-Space**, **Option-click**, or **Ctrl-click** |
+| Move selection | Arrow keys, or `j` / `k`, or mouse |
+| Choose item | **Enter** or click |
+| Close menu | **Esc**, `q`, or click outside |
+| Scroll history | Mouse wheel (when the child isn't using the mouse) |
+| Native text selection | **Shift+drag** (plain drag is captured for the trigger) |
 
 ## Configuration
 
@@ -83,30 +103,34 @@ action = "send"
 text   = "clear\n"
 ```
 
+## Known limitations
+
+- **Scrollback:** smartty runs on the outer terminal's alternate screen, so its
+  own wheel scrollback (10,000 lines) replaces the terminal's native scrollback
+  during a session; your pre-`smartty` screen is restored on exit.
+- **Text selection:** plain drag is captured for the Option-click trigger — use
+  **Shift+drag** for native selection (the terminal's standard bypass).
+- **Images:** terminal graphics protocols (Kitty, Sixel, iTerm inline images)
+  and OSC 8 hyperlinks are not modeled and won't render.
+- **Focus events** (`CSI ?1004`) are not propagated to the child.
+- **Not benchmarked** under heavy output floods; the diff renderer clones the
+  screen per changed frame.
+
+Window title, child-initiated clipboard (OSC 52), the bell, cursor shape
+(`DECSCUSR`), and application-cursor / keypad / bracketed-paste modes *are*
+passed through.
+
 ## Debugging
 
 Set `SMARTTY_DEBUG=/path/to/log` to append a diagnostic trace (raw input bytes,
 scroll reactions) to a file — useful since stderr is on the alternate screen
 while running. No overhead when unset.
 
-## Known limitations
-
-- `smartty` runs as a full-screen app on the outer terminal's alternate screen,
-  so use its built-in wheel scrollback during a session; your pre-`smartty`
-  screen is restored on exit.
-- Plain mouse drag is captured by smartty (for the Option-click trigger), so use
-  Shift+drag for native text selection (the terminal's standard bypass).
-- Focus reporting (`CSI ?1004`) is not propagated to the child, so apps that
-  redraw on focus change won't see focus events.
-
-Window title, child-initiated clipboard (OSC 52), the bell, and cursor shape
-(`DECSCUSR`) are passed through to the outer terminal.
-
 ## Recovering a stuck terminal
 
 smartty restores your terminal on normal exit, child exit, and panics. If it is
 ever killed in a way that bypasses cleanup (e.g. `kill -9`) and your terminal is
-left in raw mode, run:
+left in a bad state, run:
 
 ```sh
 reset
