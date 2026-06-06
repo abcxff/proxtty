@@ -27,7 +27,7 @@ const SETUP: &[u8] = b"\x1b[?1049h\x1b[?1000h\x1b[?1006h";
 /// show the cursor, then leave the alternate screen (restoring the user's
 /// original screen). The alt-screen exit comes last so the resets apply first.
 const TEARDOWN_VISUALS: &[u8] =
-    b"\x1b[?1006l\x1b[?1000l\x1b[?2004l\x1b[?1l\x1b>\x1b[0 q\x1b[?25h\x1b[?1049l";
+    b"\x1b[?1006l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?2004l\x1b[?1l\x1b>\x1b[0 q\x1b[?25h\x1b[?1049l";
 
 /// RAII guard that puts the outer terminal into the mode `smartty` needs and
 /// restores it on drop. Dropping is idempotent — calling [`RawModeGuard::restore`]

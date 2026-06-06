@@ -15,6 +15,46 @@ use vt100::{MouseProtocolEncoding, MouseProtocolMode};
 
 use crate::input::{MouseButton, MouseEvent, MouseKind};
 
+/// The motion-tracking level smartty enables on the *outer* terminal, on top of
+/// the always-on button tracking (`?1000`) it needs for its own trigger.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OuterMotion {
+    /// Button tracking only (`?1000`): press/release/wheel.
+    Base,
+    /// Button-event tracking (`?1002`): also motion while a button is held.
+    Button,
+    /// Any-event tracking (`?1003`): motion reported always.
+    Any,
+}
+
+/// The outer-terminal motion level needed to satisfy the child's requested mode.
+/// Drag/motion only reaches the child if the outer terminal reports it to us.
+pub fn desired_motion(mode: MouseProtocolMode) -> OuterMotion {
+    match mode {
+        MouseProtocolMode::ButtonMotion => OuterMotion::Button,
+        MouseProtocolMode::AnyMotion => OuterMotion::Any,
+        _ => OuterMotion::Base,
+    }
+}
+
+/// Escape codes to move the outer terminal's motion tracking `from` -> `to`.
+/// `?1000` stays on throughout (smartty's trigger needs it), so this only toggles
+/// the `?1002`/`?1003` overlay.
+pub fn motion_transition(from: OuterMotion, to: OuterMotion) -> Vec<u8> {
+    let mut seq = Vec::new();
+    match from {
+        OuterMotion::Button => seq.extend_from_slice(b"\x1b[?1002l"),
+        OuterMotion::Any => seq.extend_from_slice(b"\x1b[?1003l"),
+        OuterMotion::Base => {}
+    }
+    match to {
+        OuterMotion::Button => seq.extend_from_slice(b"\x1b[?1002h"),
+        OuterMotion::Any => seq.extend_from_slice(b"\x1b[?1003h"),
+        OuterMotion::Base => {}
+    }
+    seq
+}
+
 /// Whether an event of `kind` should be forwarded under the child's `mode`.
 pub fn should_forward(mode: MouseProtocolMode, kind: MouseKind) -> bool {
     let wheel = matches!(
@@ -155,6 +195,29 @@ mod tests {
         assert_eq!(
             encode(&e, MouseProtocolEncoding::Default).unwrap()[3],
             35
+        );
+    }
+
+    #[test]
+    fn motion_mirroring() {
+        use MouseProtocolMode::*;
+        assert_eq!(desired_motion(None), OuterMotion::Base);
+        assert_eq!(desired_motion(PressRelease), OuterMotion::Base);
+        assert_eq!(desired_motion(ButtonMotion), OuterMotion::Button);
+        assert_eq!(desired_motion(AnyMotion), OuterMotion::Any);
+
+        assert_eq!(motion_transition(OuterMotion::Base, OuterMotion::Base), b"");
+        assert_eq!(
+            motion_transition(OuterMotion::Base, OuterMotion::Button),
+            b"\x1b[?1002h"
+        );
+        assert_eq!(
+            motion_transition(OuterMotion::Button, OuterMotion::Base),
+            b"\x1b[?1002l"
+        );
+        assert_eq!(
+            motion_transition(OuterMotion::Button, OuterMotion::Any),
+            b"\x1b[?1002l\x1b[?1003h"
         );
     }
 

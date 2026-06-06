@@ -150,6 +150,9 @@ struct App {
     menu_border: bool,
     /// Which mouse modifiers open the overlay.
     trigger: TriggerMods,
+    /// Motion-tracking level currently enabled on the outer terminal, mirrored
+    /// from the child so drags reach apps like tmux.
+    outer_motion: mouse::OuterMotion,
 }
 
 /// Result of dispatching an input event to an open overlay.
@@ -190,6 +193,7 @@ impl App {
             menu_actions,
             menu_border: config.border,
             trigger: config.trigger_mods(),
+            outer_motion: mouse::OuterMotion::Base,
         }
     }
 
@@ -218,6 +222,7 @@ impl App {
     /// frozen (both wait until they close / return to the live bottom).
     fn flush_render(&mut self) {
         self.sync_input_modes();
+        self.sync_mouse_mode();
         if self.dirty && !self.overlay.is_open() && self.scroll_offset == 0 {
             self.renderer.render(self.screen.current());
             self.dirty = false;
@@ -249,6 +254,17 @@ impl App {
         }
         if !seq.is_empty() {
             self.renderer.write_raw(&seq);
+        }
+    }
+
+    /// Mirror the child's mouse motion-tracking level onto the outer terminal so
+    /// drags (e.g. resizing a tmux pane) are reported to us and forwarded.
+    fn sync_mouse_mode(&mut self) {
+        let desired = mouse::desired_motion(self.screen.current().mouse_protocol_mode());
+        if desired != self.outer_motion {
+            let seq = mouse::motion_transition(self.outer_motion, desired);
+            self.renderer.write_raw(&seq);
+            self.outer_motion = desired;
         }
     }
 

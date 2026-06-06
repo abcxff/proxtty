@@ -94,9 +94,8 @@ while running. No overhead when unset.
 - `smartty` runs as a full-screen app on the outer terminal's alternate screen,
   so use its built-in wheel scrollback during a session; your pre-`smartty`
   screen is restored on exit.
-- Only press/release/scroll mouse events are forwarded to the child — drag/motion
-  isn't yet (would require mirroring the child's motion-tracking mode onto the
-  terminal).
+- Plain mouse drag is captured by smartty (for the Option-click trigger), so use
+  Shift+drag for native text selection (the terminal's standard bypass).
 - Focus reporting (`CSI ?1004`) is not propagated to the child, so apps that
   redraw on focus change won't see focus events.
 
