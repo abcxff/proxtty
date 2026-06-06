@@ -1,5 +1,7 @@
 # proxtty
 
+> [https://asciinema.org/a/BXgli9YxW7AmRQUz](https://asciinema.org/a/BXgli9YxW7AmRQUz)
+
 A smart PTY proxy that wraps an interactive terminal command, forwards terminal
 I/O transparently, intercepts local input events, and renders overlay UI on top
 of the child terminal session.
