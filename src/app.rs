@@ -368,8 +368,9 @@ impl App {
         if self.menu_labels.is_empty() {
             return;
         }
-        // Draw the menu over the live screen, not a scrolled-back view.
-        self.snap_to_bottom();
+        // The menu draws over the current view (scrolled or live) and closing it
+        // repaints that same view, so opening it doesn't disturb the scroll
+        // position. Actions then operate on whatever is actually visible.
         let menu = MenuState::new(
             self.menu_labels.clone(),
             self.menu_border,
