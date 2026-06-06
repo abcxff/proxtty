@@ -138,9 +138,10 @@ the child), `set_overlay` / `clear_overlay`, `emit_raw` (OSC 52 etc.),
 `visible_text`, `size`, `send`. Runnable examples:
 
 ```sh
-cargo run --example minimal -- zsh      # hotkey toggles a box
-cargo run --example click-menu -- zsh   # Option-click opens a menu at the cursor
-cargo run --example statusbar -- top    # ScreenChanged-driven status bar
+cargo run --example minimal -- zsh         # hotkey toggles a box
+cargo run --example click-menu -- zsh      # Option-click opens a menu at the cursor
+cargo run --example statusbar -- top       # ScreenChanged-driven status bar
+cargo run --example rainbow-mouse -- zsh   # a rainbow trail follows the mouse
 ```
 
 ## Known limitations
