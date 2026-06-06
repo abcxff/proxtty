@@ -1,0 +1,21 @@
+[package]
+name = "smartty"
+version = "0.1.0"
+edition = "2021"
+description = "A smart PTY proxy that wraps an interactive command, forwards terminal I/O, intercepts local input events, and renders overlay UI on top of the child terminal session."
+license = "MIT"
+
+[[bin]]
+name = "smartty"
+path = "src/main.rs"
+
+[dependencies]
+portable-pty = "0.9"
+crossterm = "0.29"
+vt100 = "0.16"
+signal-hook = "0.4"
+libc = "0.2"
+anyhow = "1"
+
+[profile.release]
+lto = true
