@@ -11,11 +11,10 @@
 
 use std::env;
 
-/// Parsed invocation: the program to run plus its arguments.
+/// Parsed invocation: the program to run plus its arguments (may be empty, in
+/// which case [`Cli::resolve`] fills in a default).
 pub struct Cli {
-    /// The command and its arguments, e.g. `["ssh", "my-server"]`.
-    /// Guaranteed non-empty.
-    pub command: Vec<String>,
+    command: Vec<String>,
 }
 
 impl Cli {
@@ -28,23 +27,22 @@ impl Cli {
             args.next();
         }
 
-        let command: Vec<String> = args.collect();
-        if command.is_empty() {
-            return Cli {
-                command: vec![default_shell()],
-            };
+        Cli {
+            command: args.collect(),
         }
-        Cli { command }
     }
 
-    /// The program name (first element of `command`).
-    pub fn program(&self) -> &str {
-        &self.command[0]
-    }
-
-    /// Arguments passed to the program (everything after the program name).
-    pub fn args(&self) -> &[String] {
-        &self.command[1..]
+    /// The command to run: the one given on the command line, or — when none was
+    /// given — the configured shell, then `$SHELL`, then `/bin/sh`. Always
+    /// non-empty.
+    pub fn resolve(self, config_shell: Option<&str>) -> Vec<String> {
+        if !self.command.is_empty() {
+            return self.command;
+        }
+        let shell = config_shell
+            .map(str::to_string)
+            .unwrap_or_else(default_shell);
+        vec![shell]
     }
 }
 

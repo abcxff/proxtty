@@ -29,7 +29,8 @@ use crossterm::terminal;
 use portable_pty::PtySize;
 use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM, SIGWINCH};
 
-use crate::cli::Cli;
+use crate::actions;
+use crate::config::{ActionSpec, Config, TriggerMods};
 use crate::input::{InputEvent, InputParser, MouseButton, MouseEvent, MouseKind};
 use crate::mouse;
 use crate::overlay::{self, MenuOutcome, MenuState, Overlay};
@@ -38,9 +39,6 @@ use crate::renderer::Renderer;
 use crate::screen::TerminalScreen;
 use crate::term::RawModeGuard;
 
-/// Local trigger byte. Ctrl-Space (NUL) by default; configurable in Milestone 14.
-const HOTKEY: u8 = 0x00;
-
 /// An event delivered to the main loop from one of the I/O threads.
 enum AppEvent {
     Input(InputEvent),
@@ -48,8 +46,9 @@ enum AppEvent {
     Resize(u16, u16),
 }
 
-/// Run the proxy for `cli`'s command. Returns the child's exit code.
-pub fn run(cli: &Cli) -> anyhow::Result<i32> {
+/// Run the proxy for `command` with the given `config`. Returns the child's exit
+/// code. `command` is guaranteed non-empty by the caller.
+pub fn run(command: &[String], config: &Config) -> anyhow::Result<i32> {
     // A terminal that reports a zero dimension (or no size at all) would make the
     // screen model degenerate, so fall back to a sane default.
     let (mut cols, mut rows) = terminal::size().unwrap_or((80, 24));
@@ -69,14 +68,14 @@ pub fn run(cli: &Cli) -> anyhow::Result<i32> {
     // Raw mode + mouse reporting, restored on every exit path including panics.
     let mut guard = RawModeGuard::enter()?;
 
-    let (mut session, reader, writer) = PtySession::spawn(cli.program(), cli.args(), size)?;
+    let (mut session, reader, writer) = PtySession::spawn(&command[0], &command[1..], size)?;
 
     // Bounded so a flood of child output applies backpressure rather than growing
     // memory without bound.
     let (tx, rx) = sync_channel::<AppEvent>(256);
 
     spawn_pty_reader(reader, tx.clone());
-    spawn_stdin_reader(tx.clone());
+    spawn_stdin_reader(tx.clone(), config.hotkey_byte());
     spawn_resize_thread(tx.clone());
     drop(tx); // main holds only the receiver; producers hold the clones.
 
@@ -87,7 +86,7 @@ pub fn run(cli: &Cli) -> anyhow::Result<i32> {
         signal_hook::flag::register(sig, Arc::clone(&terminate))?;
     }
 
-    let mut app = App::new((cols, rows), writer, session.master());
+    let mut app = App::new((cols, rows), writer, session.master(), config);
 
     let exit_code = loop {
         if let Some(status) = session.child.try_wait()? {
@@ -144,6 +143,13 @@ struct App {
     im_app_cursor: bool,
     im_app_keypad: bool,
     im_bracketed_paste: bool,
+    /// Menu item labels and the action each performs (parallel, from config).
+    menu_labels: Vec<String>,
+    menu_actions: Vec<ActionSpec>,
+    /// Whether to draw a border around the menu.
+    menu_border: bool,
+    /// Which mouse modifiers open the overlay.
+    trigger: TriggerMods,
 }
 
 /// Result of dispatching an input event to an open overlay.
@@ -154,11 +160,20 @@ enum OverlayAct {
     Redraw(Vec<u8>),
     /// Close the overlay.
     Close,
+    /// An item was chosen; run its action, then close.
+    Selected(usize),
 }
 
 impl App {
-    fn new(size: (u16, u16), writer: Box<dyn Write + Send>, master: MasterHandle) -> App {
+    fn new(
+        size: (u16, u16),
+        writer: Box<dyn Write + Send>,
+        master: MasterHandle,
+        config: &Config,
+    ) -> App {
         let (cols, rows) = size;
+        let menu_labels = config.menu.iter().map(|m| m.label.clone()).collect();
+        let menu_actions = config.menu.iter().map(|m| m.action.clone()).collect();
         App {
             size,
             overlay: Overlay::None,
@@ -171,6 +186,10 @@ impl App {
             im_app_cursor: false,
             im_app_keypad: false,
             im_bracketed_paste: false,
+            menu_labels,
+            menu_actions,
+            menu_border: config.border,
+            trigger: config.trigger_mods(),
         }
     }
 
@@ -235,7 +254,7 @@ impl App {
             match overlay::handle(menu, &ev) {
                 MenuOutcome::Stay => OverlayAct::Redraw(overlay::redraw_sequence(menu)),
                 MenuOutcome::Close => OverlayAct::Close,
-                MenuOutcome::Selected(_idx) => OverlayAct::Close, // placeholder action
+                MenuOutcome::Selected(idx) => OverlayAct::Selected(idx),
             }
         } else {
             OverlayAct::NotOpen
@@ -244,6 +263,12 @@ impl App {
         match act {
             OverlayAct::Redraw(seq) => self.renderer.write_raw(&seq),
             OverlayAct::Close => self.close_overlay(),
+            OverlayAct::Selected(idx) => {
+                // Run the action first (it may write to the child), then close
+                // so the repaint reflects any change.
+                self.run_menu_action(idx);
+                self.close_overlay();
+            }
             OverlayAct::NotOpen => self.on_input_ground(ev),
         }
     }
@@ -252,7 +277,7 @@ impl App {
     fn on_input_ground(&mut self, ev: InputEvent) {
         match ev {
             InputEvent::Hotkey => self.open_overlay(default_anchor()),
-            InputEvent::Mouse(m) if is_overlay_trigger(&m) => {
+            InputEvent::Mouse(m) if self.is_overlay_trigger(&m) => {
                 self.open_overlay((m.col + 1, m.row + 1))
             }
             // Wheel scrolling drives smartty's scrollback when the child isn't
@@ -316,10 +341,54 @@ impl App {
     }
 
     fn open_overlay(&mut self, anchor: (u16, u16)) {
-        let menu = MenuState::new(anchor.0, anchor.1, self.size);
+        if self.menu_labels.is_empty() {
+            return;
+        }
+        let menu = MenuState::new(
+            self.menu_labels.clone(),
+            self.menu_border,
+            anchor.0,
+            anchor.1,
+            self.size,
+        );
         let seq = overlay::open_sequence(&menu);
         self.overlay = Overlay::Menu(menu);
         self.renderer.write_raw(&seq);
+    }
+
+    /// Run the action bound to menu item `idx`.
+    fn run_menu_action(&mut self, idx: usize) {
+        let Some(action) = self.menu_actions.get(idx).cloned() else {
+            return;
+        };
+        match action {
+            ActionSpec::Send { text } => {
+                let _ = self.writer.write_all(text.as_bytes());
+                let _ = self.writer.flush();
+            }
+            ActionSpec::CopyScreen => {
+                let text = self.screen.visible_text();
+                self.renderer.write_raw(&actions::osc52_copy(&text));
+            }
+            ActionSpec::OpenUrl => {
+                let text = self.screen.visible_text();
+                if let Some(url) = actions::find_url(&text) {
+                    open_url(url);
+                }
+            }
+        }
+    }
+
+    /// Does this mouse event open the overlay, per the configured trigger?
+    fn is_overlay_trigger(&self, m: &MouseEvent) -> bool {
+        if m.kind != MouseKind::Down || m.button != MouseButton::Left {
+            return false;
+        }
+        match self.trigger {
+            TriggerMods::Alt => m.alt,
+            TriggerMods::Ctrl => m.ctrl,
+            TriggerMods::Any => m.alt || m.ctrl,
+        }
     }
 
     /// Close the overlay and repaint the child screen, which erases the menu.
@@ -342,11 +411,15 @@ fn default_anchor() -> (u16, u16) {
     (3, 2)
 }
 
-/// Does this mouse event open the overlay? Option-click is the primary trigger,
-/// Ctrl-click the fallback for terminals that swallow Alt. Plain and right
-/// clicks are intentionally left for the child so its own mouse handling works.
-fn is_overlay_trigger(m: &MouseEvent) -> bool {
-    m.kind == MouseKind::Down && m.button == MouseButton::Left && (m.alt || m.ctrl)
+/// Open `url` in the user's default application, reaping the helper process so it
+/// doesn't linger as a zombie.
+fn open_url(url: String) {
+    use std::process::Command;
+    if let Ok(mut child) = Command::new(actions::opener()).arg(url).spawn() {
+        thread::spawn(move || {
+            let _ = child.wait();
+        });
+    }
 }
 
 /// PTY output → `AppEvent::Output`.
@@ -368,9 +441,9 @@ fn spawn_pty_reader(mut reader: Box<dyn Read + Send>, tx: SyncSender<AppEvent>) 
 
 /// Raw stdin → `InputParser` → `AppEvent::Input`. Detached: a blocking stdin
 /// read can't be cleanly interrupted, so the process exit reaps it.
-fn spawn_stdin_reader(tx: SyncSender<AppEvent>) {
+fn spawn_stdin_reader(tx: SyncSender<AppEvent>, hotkey: u8) {
     thread::spawn(move || {
-        let mut parser = InputParser::new(HOTKEY);
+        let mut parser = InputParser::new(hotkey);
         let stdin = io::stdin();
         let mut handle = stdin.lock();
         let mut buf = [0u8; 8192];

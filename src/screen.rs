@@ -56,4 +56,9 @@ impl TerminalScreen {
     pub fn child_wants_mouse(&self) -> bool {
         self.parser.screen().mouse_protocol_mode() != vt100::MouseProtocolMode::None
     }
+
+    /// Plain-text contents of the currently visible rows (used by menu actions).
+    pub fn visible_text(&self) -> String {
+        self.parser.screen().contents()
+    }
 }

@@ -38,27 +38,59 @@ top
 
 ## Current status
 
-Implemented (Milestones 1–10): transparent proxy with crash-safe terminal
+Implemented (Milestones 1–15): transparent proxy with crash-safe terminal
 restoration and live resize; local input interception; a context-menu overlay
 composited over a parsed (`vt100`) screen buffer; mouse forwarding to the child;
-and alternate-screen / input-mode correctness for full-screen apps. This is the
-core "menu over SSH" milestone.
+alternate-screen / input-mode correctness for full-screen apps; wheel-driven
+scrollback; configuration; and working menu actions.
 
 Press **Ctrl-Space** (or **Option-click** / Ctrl-click) to open the menu; arrow
-keys or `j`/`k` move, Enter selects (placeholder), Esc or a click outside closes.
+keys or `j`/`k` move, Enter or click selects, Esc or an outside click closes.
 
 Mouse clicks and wheel-scroll are forwarded to child apps (`vim`, `tmux`,
 `less`, `fzf`) when they request mouse reporting; only the Option/Ctrl-click
-trigger is held back. The child's application-cursor, keypad, and bracketed-paste
-modes are mirrored onto the outer terminal so keys and pastes encode correctly.
+trigger is held back. When the child isn't using the mouse, wheel-scroll moves
+through `smartty`'s scrollback. The child's application-cursor, keypad, and
+bracketed-paste modes are mirrored onto the outer terminal so keys and pastes
+encode correctly.
 
-Known limitations (addressed by later milestones):
+## Configuration
+
+Optional. Loaded from `$SMARTTY_CONFIG`, else `~/.config/smartty/config.toml`. A
+missing or invalid file falls back to built-in defaults.
+
+```toml
+hotkey  = "ctrl-space"   # ctrl-space | ctrl-] | ctrl-\ | ctrl-a .. ctrl-z
+trigger = "any"          # any | option-click | ctrl-click
+shell   = "/bin/zsh"     # used when no command is given on the CLI
+border  = true
+
+# Menu items, top to bottom. Each has a label and an action:
+#   copy_screen  → copy the visible screen to the clipboard (OSC 52)
+#   open_url     → open the first http(s) URL on screen
+#   send         → send `text` to the child (e.g. run a command)
+[[menu]]
+label  = "Copy screen → clipboard"
+action = "copy_screen"
+
+[[menu]]
+label  = "Open first URL"
+action = "open_url"
+
+[[menu]]
+label  = "Send: clear"
+action = "send"
+text   = "clear\n"
+```
+
+## Known limitations
 
 - `smartty` owns the visible screen and repaints from its buffer; the outer
-  terminal's native scrollback no longer accumulates child output (scrollback is
-  Milestone 11).
-- Only press/release/scroll mouse events are forwarded — drag/motion isn't yet
-  (would require mirroring the child's motion-tracking mode onto the terminal).
+  terminal's native scrollback no longer accumulates child output (use the
+  built-in wheel scrollback instead).
+- Only press/release/scroll mouse events are forwarded to the child — drag/motion
+  isn't yet (would require mirroring the child's motion-tracking mode onto the
+  terminal).
 
 ## Recovering a stuck terminal
 
