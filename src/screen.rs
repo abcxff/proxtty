@@ -8,10 +8,9 @@
 
 use vt100::Parser;
 
-/// Scrollback retained by the parser. None for now; Milestone 11 adds a real
-/// scrollback model. Keeping it at zero also keeps screen clones (used for diff
-/// rendering) cheap.
-const SCROLLBACK: usize = 0;
+/// Lines of scrollback retained by the parser (Milestone 11). Bounded so the
+/// per-frame screen clone used for diff rendering stays affordable.
+const SCROLLBACK: usize = 1000;
 
 /// A parsed model of the child's terminal screen.
 pub struct TerminalScreen {
@@ -38,5 +37,23 @@ impl TerminalScreen {
     /// The current screen state, for rendering.
     pub fn current(&self) -> &vt100::Screen {
         self.parser.screen()
+    }
+
+    /// Move the scrollback view `rows` lines back from the live bottom (0 = live).
+    /// Returns the actual offset after clamping to the available scrollback.
+    pub fn scroll_to(&mut self, rows: usize) -> usize {
+        let screen = self.parser.screen_mut();
+        screen.set_scrollback(rows);
+        screen.scrollback()
+    }
+
+    /// Whether the child is currently using the alternate screen (e.g. `vim`).
+    pub fn alternate_screen(&self) -> bool {
+        self.parser.screen().alternate_screen()
+    }
+
+    /// Whether the child has requested any mouse reporting.
+    pub fn child_wants_mouse(&self) -> bool {
+        self.parser.screen().mouse_protocol_mode() != vt100::MouseProtocolMode::None
     }
 }

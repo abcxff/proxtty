@@ -135,6 +135,9 @@ struct App {
     renderer: Renderer,
     /// The screen buffer changed since the last paint.
     dirty: bool,
+    /// Scrollback view offset from the live bottom (0 = live). When non-zero the
+    /// view is frozen and live output is not painted until the user scrolls back.
+    scroll_offset: usize,
     /// Last input modes mirrored onto the outer terminal (so its keys/pastes are
     /// encoded the way the child expects). All start off, matching a fresh raw
     /// terminal.
@@ -164,6 +167,7 @@ impl App {
             screen: TerminalScreen::new(rows, cols),
             renderer: Renderer::new(rows, cols),
             dirty: false,
+            scroll_offset: 0,
             im_app_cursor: false,
             im_app_keypad: false,
             im_bracketed_paste: false,
@@ -184,10 +188,11 @@ impl App {
         self.dirty = true;
     }
 
-    /// Paint pending output, unless an overlay is up (then it waits for close).
+    /// Paint pending output, unless an overlay is up or the scrollback view is
+    /// frozen (both wait until they close / return to the live bottom).
     fn flush_render(&mut self) {
         self.sync_input_modes();
-        if self.dirty && !self.overlay.is_open() {
+        if self.dirty && !self.overlay.is_open() && self.scroll_offset == 0 {
             self.renderer.render(self.screen.current());
             self.dirty = false;
         }
@@ -250,6 +255,15 @@ impl App {
             InputEvent::Mouse(m) if is_overlay_trigger(&m) => {
                 self.open_overlay((m.col + 1, m.row + 1))
             }
+            // Wheel scrolling drives smartty's scrollback when the child isn't
+            // using the mouse and isn't on the alternate screen.
+            InputEvent::Mouse(m)
+                if matches!(m.kind, MouseKind::ScrollUp | MouseKind::ScrollDown)
+                    && !self.screen.child_wants_mouse()
+                    && !self.screen.alternate_screen() =>
+            {
+                self.scroll(m.kind)
+            }
             // Otherwise hand the event to the child if it has asked for mouse
             // reporting, re-encoded in its requested protocol.
             InputEvent::Mouse(m) => self.forward_mouse(&m),
@@ -258,6 +272,21 @@ impl App {
                 let _ = self.writer.flush();
             }
         }
+    }
+
+    /// Move the scrollback view up or down by a few lines and repaint it.
+    fn scroll(&mut self, kind: MouseKind) {
+        const STEP: usize = 3;
+        let target = match kind {
+            MouseKind::ScrollUp => self.scroll_offset + STEP,
+            MouseKind::ScrollDown => self.scroll_offset.saturating_sub(STEP),
+            _ => return,
+        };
+        self.scroll_offset = self.screen.scroll_to(target);
+        // Repaint the (possibly frozen) view. Once back at the live bottom this
+        // shows current output and normal diff rendering resumes.
+        self.renderer.repaint(self.screen.current());
+        self.dirty = false;
     }
 
     /// Re-encode a mouse event and forward it to the child if it wants mouse.
@@ -278,8 +307,9 @@ impl App {
         self.size = (cols, rows);
         self.screen.resize(rows, cols);
         pty_session::resize(&self.master, rows, cols);
-        // Dismiss the overlay (its geometry no longer fits) and repaint the
-        // resized screen cleanly.
+        // Return to the live bottom — a scrollback offset is meaningless after a
+        // reflow — dismiss the overlay, and repaint the resized screen cleanly.
+        self.scroll_offset = self.screen.scroll_to(0);
         self.overlay = Overlay::None;
         self.renderer.repaint(self.screen.current());
         self.dirty = false;
